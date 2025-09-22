@@ -1,0 +1,7 @@
+PyPDF2==3.0.1
+boto3>=1.40.30
+
+# System requirements:
+# - Calibre: sudo apt-get install calibre (Ubuntu/Debian) or brew install calibre (macOS)
+# - AWS credentials configured for Bedrock access
+# - AWS Bedrock Nova Micro model access in us-east-1 region

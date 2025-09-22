@@ -1,0 +1,11 @@
+AmazonQ.md
+Sakana.ai
+.DS_Store
+.amazonq/
+.idea/
+.secure-agent/
+Deep Research/
+Other Research/
+*~
+__pycache__/
+epub_books*
