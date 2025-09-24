@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import argparse
 import subprocess
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -220,17 +221,21 @@ Please fix the XML file to make it valid against the schema."""
             raise RuntimeError(f"Could not read schema file {self.schema_file}: {e}")
 
 def main():
-    """Test LaTeX-to-XML conversion with Q Developer CLI"""
-    converter = LatexToXmlConverter()
+    """LaTeX-to-XML conversion with Q Developer CLI"""
+    parser = argparse.ArgumentParser(description='Convert LaTeX file to XML using Q Developer CLI')
+    parser.add_argument('latex_file', help='Path to the LaTeX file to convert')
+    parser.add_argument('-o', '--output', help='Output XML file path (default: input_name.xml)')
     
-    # Default to Word2Vec LaTeX file
-    latex_file = "../../LaTeX/efficient-v22.tex"
-    output_file = "word2vec_from_latex.xml"
+    args = parser.parse_args()
+    
+    latex_file = args.latex_file
+    output_file = args.output
     
     if not Path(latex_file).exists():
         print(f"❌ LaTeX file not found: {latex_file}")
-        print("Please specify the path to a LaTeX file")
         return
+    
+    converter = LatexToXmlConverter()
     
     print("🚀 LaTeX-to-XML Converter using Q Developer CLI")
     print("=" * 60)
@@ -246,22 +251,8 @@ def main():
         print(f"📁 Output file: {output_path}")
         print("🎉 LaTeX-to-XML conversion complete!")
         
-        # Test the XML-to-ePub pipeline
-        print()
-        print("🔄 Testing XML-to-ePub conversion...")
-        try:
-            from xml_to_epub import XmlToEpubConverter
-            epub_converter = XmlToEpubConverter()
-            epub_path = epub_converter.convert_xml_to_epub(output_path)
-            print(f"📚 Generated ePub: {epub_path}")
-            print("🎉 Complete LaTeX → XML → ePub pipeline successful!")
-        except Exception as e:
-            print(f"⚠️ ePub conversion failed: {e}")
-        
     except Exception as e:
-        print(f"❌ Error: {e}")
-        import traceback
-        traceback.print_exc()
+        print(f"❌ Conversion failed: {e}")
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
