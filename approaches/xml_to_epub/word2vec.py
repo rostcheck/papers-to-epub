@@ -17,7 +17,7 @@ def convert_latex_to_xml(latex_content):
     title_elem = ET.SubElement(metadata, "title")
     title_elem.text = title_match.group(1) if title_match else "Unknown Title"
     
-    # Extract authors with complete parsing
+    # Extract authors
     authors_elem = ET.SubElement(metadata, "authors")
     author_section = re.search(r'\\author\{(.*?)\}', latex_content, re.DOTALL)
     if author_section:
@@ -25,25 +25,32 @@ def convert_latex_to_xml(latex_content):
         # Split by \And or \AND
         author_parts = re.split(r'\\And|\\AND', author_text)
         
-        # Define all authors from the paper
-        authors_data = [
-            {"name": "Tomas Mikolov", "email": "tmikolov@google.com"},
-            {"name": "Kai Chen", "email": "kaichen@google.com"},
-            {"name": "Greg Corrado", "email": "gcorrado@google.com"},
-            {"name": "Jeffrey Dean", "email": "jeff@google.com"}
-        ]
-        
-        for author_data in authors_data:
+        for author_part in author_parts:
             author_elem = ET.SubElement(authors_elem, "author")
             
-            name_elem = ET.SubElement(author_elem, "name")
-            name_elem.text = author_data["name"]
-            
-            affiliation_elem = ET.SubElement(author_elem, "affiliation")
-            affiliation_elem.text = "Google Inc., Mountain View, CA"
-            
-            email_elem = ET.SubElement(author_elem, "email")
-            email_elem.text = author_data["email"]
+            # Extract name (first line)
+            lines = [line.strip() for line in author_part.strip().split('\n') if line.strip()]
+            if lines:
+                name_elem = ET.SubElement(author_elem, "name")
+                name_elem.text = lines[0].replace('\\\\', '').strip()
+                
+                # Extract affiliation and email
+                affiliation_lines = []
+                email = None
+                for line in lines[1:]:
+                    if '\\texttt{' in line:
+                        email_match = re.search(r'\\texttt\{([^}]+)\}', line)
+                        if email_match:
+                            email = email_match.group(1)
+                    elif line and not line.startswith('\\'):
+                        affiliation_lines.append(line.rstrip(','))
+                
+                affiliation_elem = ET.SubElement(author_elem, "affiliation")
+                affiliation_elem.text = ', '.join(affiliation_lines) if affiliation_lines else "Google Inc., Mountain View, CA"
+                
+                if email:
+                    email_elem = ET.SubElement(author_elem, "email")
+                    email_elem.text = email
     
     # Extract abstract
     abstract_match = re.search(r'\\begin\{abstract\}(.*?)\\end\{abstract\}', latex_content, re.DOTALL)
@@ -56,8 +63,8 @@ def convert_latex_to_xml(latex_content):
     # Create sections
     sections_elem = ET.SubElement(root, "sections")
     
-    # Extract sections with better content handling
-    section_pattern = r'\\section\{([^}]+)\}(.*?)(?=\\section\{|\\bibliography|\\begin\{thebibliography\}|\\end\{document\}|$)'
+    # Extract sections
+    section_pattern = r'\\section\{([^}]+)\}(.*?)(?=\\section\{|\\bibliography|\\begin\{thebibliography\}|$)'
     sections = re.findall(section_pattern, latex_content, re.DOTALL)
     
     section_id = 1
@@ -72,19 +79,12 @@ def convert_latex_to_xml(latex_content):
         content_elem = ET.SubElement(section_elem, "content")
         
         # Extract subsections
-        subsection_pattern = r'\\subsection\{([^}]+)\}(.*?)(?=\\subsection\{|\\section\{|\\bibliography|\\begin\{thebibliography\}|\\end\{document\}|$)'
+        subsection_pattern = r'\\subsection\{([^}]+)\}(.*?)(?=\\subsection\{|\\section\{|$)'
         subsections = re.findall(subsection_pattern, section_content, re.DOTALL)
         
         if subsections:
             subsections_elem = ET.SubElement(section_elem, "subsections")
             subsection_id = 1
-            
-            # Get content before first subsection
-            first_subsection_pos = section_content.find('\\subsection{')
-            if first_subsection_pos > 0:
-                pre_subsection_content = section_content[:first_subsection_pos]
-                if pre_subsection_content.strip():
-                    add_paragraphs(content_elem, clean_latex_text(pre_subsection_content))
             
             for subsection_title, subsection_content in subsections:
                 subsection_elem = ET.SubElement(subsections_elem, "subsection")
@@ -97,6 +97,14 @@ def convert_latex_to_xml(latex_content):
                 sub_content_elem = ET.SubElement(subsection_elem, "content")
                 add_paragraphs(sub_content_elem, clean_latex_text(subsection_content))
                 subsection_id += 1
+            
+            # Add remaining content after subsections
+            remaining_content = section_content
+            for _, sub_content in subsections:
+                remaining_content = remaining_content.replace(sub_content, '', 1)
+            remaining_content = re.sub(r'\\subsection\{[^}]+\}', '', remaining_content)
+            if remaining_content.strip():
+                add_paragraphs(content_elem, clean_latex_text(remaining_content))
         else:
             add_paragraphs(content_elem, clean_latex_text(section_content))
         
@@ -108,9 +116,6 @@ def clean_latex_text(text):
     """Clean LaTeX text and convert to plain text with basic formatting"""
     # Remove comments
     text = re.sub(r'%.*$', '', text, flags=re.MULTILINE)
-    
-    # Handle math expressions (simplified)
-    text = re.sub(r'\$([^$]+)\$', r'\1', text)  # Inline math
     
     # Convert LaTeX commands
     text = re.sub(r'\\textbf\{([^}]+)\}', r'\1', text)  # Bold
@@ -125,7 +130,7 @@ def clean_latex_text(text):
     text = re.sub(r'\\cite\{[^}]+\}', '', text)
     
     # Remove footnotes
-    text = re.sub(r'\\footnote\{[^}]*\}', '', text)
+    text = re.sub(r'\\footnote\{[^}]+\}', '', text)
     
     # Remove URLs
     text = re.sub(r'\\url\{[^}]+\}', '', text)
@@ -134,28 +139,16 @@ def clean_latex_text(text):
     text = re.sub(r'Figure~\\ref\{[^}]+\}', 'Figure', text)
     text = re.sub(r'Table~\\ref\{[^}]+\}', 'Table', text)
     text = re.sub(r'\\ref\{[^}]+\}', '', text)
-    text = re.sub(r'\\label\{[^}]+\}', '', text)
     
-    # Remove equation environments
+    # Remove equation environments (simplified)
     text = re.sub(r'\\begin\{equation\}.*?\\end\{equation\}', '[EQUATION]', text, flags=re.DOTALL)
-    
-    # Remove figure and table environments
-    text = re.sub(r'\\begin\{figure\}.*?\\end\{figure\}', '', text, flags=re.DOTALL)
-    text = re.sub(r'\\begin\{table\}.*?\\end\{table\}', '', text, flags=re.DOTALL)
     
     # Remove other LaTeX commands
     text = re.sub(r'\\[a-zA-Z]+\*?(\[[^\]]*\])?\{[^}]*\}', '', text)
     text = re.sub(r'\\[a-zA-Z]+\*?', '', text)
     
-    # Clean up special characters
-    text = text.replace('\\\\', ' ')
-    text = text.replace('~', ' ')
-    text = text.replace('---', '—')
-    text = text.replace('--', '–')
-    
-    # Clean up whitespace and fix common issues
+    # Clean up whitespace
     text = re.sub(r'\s+', ' ', text)
-    text = text.replace('\\', '')  # Remove remaining backslashes
     text = text.strip()
     
     return text
@@ -165,11 +158,11 @@ def add_paragraphs(parent_elem, text):
     if not text.strip():
         return
     
-    # Split into paragraphs
-    paragraphs = [p.strip() for p in re.split(r'\n\s*\n', text) if p.strip()]
+    # Split into paragraphs (simple approach)
+    paragraphs = [p.strip() for p in text.split('\n\n') if p.strip()]
     
     for para_text in paragraphs:
-        if para_text and len(para_text) > 10:  # Skip very short fragments
+        if para_text:
             p_elem = ET.SubElement(parent_elem, "{http://www.w3.org/1999/xhtml}p")
             p_elem.text = para_text
 
@@ -182,8 +175,8 @@ def format_xml_output(root):
                 elem.text = i + "  "
             if not elem.tail or not elem.tail.strip():
                 elem.tail = i
-            for child in elem:
-                indent(child, level + 1)
+            for elem in elem:
+                indent(elem, level + 1)
             if not elem.tail or not elem.tail.strip():
                 elem.tail = i
         else:
@@ -211,4 +204,4 @@ with open('word2vec_from_latex.xml', 'wb') as f:
     f.write(b'<?xml version="1.0" encoding="UTF-8"?>\n')
     tree.write(f, encoding='utf-8', xml_declaration=False)
 
-print("Final conversion completed. XML file saved as 'word2vec_from_latex.xml'")
+print("Conversion completed. XML file saved as 'word2vec_from_latex.xml'")
