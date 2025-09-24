@@ -1,0 +1,192 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<paper xmlns="http://example.com/academic-paper"
+       xmlns:xhtml="http://www.w3.org/1999/xhtml"
+       xmlns:mathml="http://www.w3.org/1998/Math/MathML">
+
+  <metadata>
+    <title>Efficient Estimation of Word Representations in Vector Space</title>
+    
+    <authors>
+      <author>
+        <name>Tomas Mikolov</name>
+        <affiliation>Google Inc., Mountain View, CA</affiliation>
+        <email>tmikolov@google.com</email>
+      </author>
+      <author>
+        <name>Kai Chen</name>
+        <affiliation>Google Inc., Mountain View, CA</affiliation>
+        <email>kaichen@google.com</email>
+      </author>
+      <author>
+        <name>Greg Corrado</name>
+        <affiliation>Google Inc., Mountain View, CA</affiliation>
+        <email>gcorrado@google.com</email>
+      </author>
+      <author>
+        <name>Jeffrey Dean</name>
+        <affiliation>Google Inc., Mountain View, CA</affiliation>
+        <email>jeff@google.com</email>
+      </author>
+    </authors>
+    
+    <abstract>
+      <xhtml:p>We propose two novel model architectures for computing continuous vector representations of words from very large data sets. The quality of these representations is measured in a word similarity task, and the results are compared to the previously best performing techniques based on different types of neural networks.</xhtml:p>
+      <xhtml:p>We observe large improvements in accuracy at much lower computational cost, i.e. it takes less than a day to learn high quality word vectors from a 1.6 billion words data set. Furthermore, we show that these vectors provide state-of-the-art performance on our test set for measuring syntactic and semantic word similarities.</xhtml:p>
+    </abstract>
+    
+    <keywords>
+      <keyword>word representations</keyword>
+      <keyword>neural networks</keyword>
+      <keyword>vector space</keyword>
+      <keyword>natural language processing</keyword>
+    </keywords>
+    
+    <publication_info>
+      <venue>arXiv preprint</venue>
+      <date>2013-01-16</date>
+      <arxiv_id>1301.3781v3</arxiv_id>
+      <document_class>workshop paper</document_class>
+    </publication_info>
+  </metadata>
+
+  <sections>
+    <section id="introduction" level="1">
+      <title>Introduction</title>
+      <content>
+        <xhtml:p>Many current NLP systems and techniques treat words as atomic units - there is no notion of similarity between words, as these are represented as indices in a vocabulary. This choice has several good reasons - simplicity, robustness and the observation that simple models trained on huge amounts of data outperform complex systems trained on less data.</xhtml:p>
+        
+        <xhtml:p>However, the simple techniques are at their limits in many tasks. For example, the amount of relevant in-domain data for automatic speech recognition is limited - the performance is usually dominated by the size of high quality transcribed speech data (often just millions of words).</xhtml:p>
+        
+        <xhtml:p>With progress of machine learning techniques in recent years, it has become possible to train more complex models on much larger data set, and they typically outperform the simple models. Probably the most successful concept is to use distributed representations of words.</xhtml:p>
+      </content>
+      
+      <subsections>
+        <subsection id="goals_of_the_paper" level="2">
+          <title>Goals of the Paper</title>
+          <content>
+            <xhtml:p>The main goal of this paper is to introduce techniques that can be used for learning high-quality word vectors from huge data sets with billions of words, and with millions of words in the vocabulary.</xhtml:p>
+            
+            <xhtml:p>We use recently proposed techniques for measuring the quality of the resulting vector representations, with the expectation that not only will similar words tend to be close to each other, but that words can have <xhtml:strong>multiple degrees of similarity</xhtml:strong>.</xhtml:p>
+            
+            <xhtml:p>Somewhat surprisingly, it was found that similarity of word representations goes beyond simple syntactic regularities. Using a word offset technique where simple algebraic operations are performed on the word vectors, it was shown for example that <xhtml:em>
+              <mathml:math display="inline">
+                <mathml:mi>vector</mathml:mi>
+                <mathml:mo>(</mathml:mo>
+                <mathml:mtext>"King"</mathml:mtext>
+                <mathml:mo>)</mathml:mo>
+                <mathml:mo>−</mathml:mo>
+                <mathml:mi>vector</mathml:mi>
+                <mathml:mo>(</mathml:mo>
+                <mathml:mtext>"Man"</mathml:mtext>
+                <mathml:mo>)</mathml:mo>
+                <mathml:mo>+</mathml:mo>
+                <mathml:mi>vector</mathml:mi>
+                <mathml:mo>(</mathml:mo>
+                <mathml:mtext>"Woman"</mathml:mtext>
+                <mathml:mo>)</mathml:mo>
+              </mathml:math>
+            </xhtml:em> results in a vector that is closest to the vector representation of the word <xhtml:em>Queen</xhtml:em>.</xhtml:p>
+          </content>
+        </subsection>
+        
+        <subsection id="previous_work" level="2">
+          <title>Previous Work</title>
+          <content>
+            <xhtml:p>Representation of words as continuous vectors has a long history. A very popular model architecture for estimating neural network language model (NNLM) was proposed where a feedforward neural network with a linear projection layer and a non-linear hidden layer was used to learn jointly the word vector representation and a statistical language model.</xhtml:p>
+          </content>
+        </subsection>
+      </subsections>
+    </section>
+
+    <section id="model_architectures" level="1">
+      <title>Model Architectures</title>
+      <content>
+        <xhtml:p>Many different types of models were proposed for estimating continuous representations of words, including the well-known Latent Semantic Analysis (LSA) and Latent Dirichlet Allocation (LDA). In this paper, we focus on distributed representations of words learned by neural networks.</xhtml:p>
+        
+        <xhtml:p>For all the following models, the training complexity is proportional to</xhtml:p>
+      </content>
+      
+      <subsections>
+        <subsection id="feedforward_nnlm" level="2">
+          <title>Feedforward Neural Net Language Model (NNLM)</title>
+          <content>
+            <xhtml:p>The probabilistic feedforward neural network language model consists of input, projection, hidden and output layers. The computational complexity per each training example is given by the equation below, where the dominating term is <mathml:math display="inline"><mathml:mi>H</mathml:mi><mathml:mo>×</mathml:mo><mathml:mi>V</mathml:mi></mathml:math>.</xhtml:p>
+          </content>
+        </subsection>
+      </subsections>
+    </section>
+  </sections>
+
+  <equations>
+    <equation id="eq1" position="section_model_architectures">
+      <content>
+        <mathml:math display="block">
+          <mathml:mi>O</mathml:mi>
+          <mathml:mo>=</mathml:mo>
+          <mathml:mi>E</mathml:mi>
+          <mathml:mo>×</mathml:mo>
+          <mathml:mi>T</mathml:mi>
+          <mathml:mo>×</mathml:mo>
+          <mathml:mi>Q</mathml:mi>
+        </mathml:math>
+      </content>
+      <description>Training complexity formula</description>
+      <latex_source>O = E \times T \times Q</latex_source>
+    </equation>
+    
+    <equation id="eq2" position="section_feedforward_nnlm">
+      <content>
+        <mathml:math display="block">
+          <mathml:mi>Q</mathml:mi>
+          <mathml:mo>=</mathml:mo>
+          <mathml:mi>N</mathml:mi>
+          <mathml:mo>×</mathml:mo>
+          <mathml:mi>D</mathml:mi>
+          <mathml:mo>+</mathml:mo>
+          <mathml:mi>N</mathml:mi>
+          <mathml:mo>×</mathml:mo>
+          <mathml:mi>D</mathml:mi>
+          <mathml:mo>×</mathml:mo>
+          <mathml:mi>H</mathml:mi>
+          <mathml:mo>+</mathml:mo>
+          <mathml:mi>H</mathml:mi>
+          <mathml:mo>×</mathml:mo>
+          <mathml:mi>V</mathml:mi>
+        </mathml:math>
+      </content>
+      <description>NNLM computational complexity</description>
+      <latex_source>Q = N \times D + N \times D \times H + H \times V</latex_source>
+    </equation>
+  </equations>
+
+  <references>
+    <reference id="ref1">
+      <authors>
+        <author>Bengio, Y.</author>
+        <author>Ducharme, R.</author>
+        <author>Vincent, P.</author>
+        <author>Jauvin, C.</author>
+      </authors>
+      <title>A neural probabilistic language model</title>
+      <venue>Journal of Machine Learning Research</venue>
+      <year>2003</year>
+    </reference>
+    
+    <reference id="ref2">
+      <authors>
+        <author>Hinton, G. E.</author>
+      </authors>
+      <title>Learning distributed representations of concepts</title>
+      <venue>Proceedings of the eighth annual conference of the cognitive science society</venue>
+      <year>1986</year>
+    </reference>
+  </references>
+
+  <citations>
+    <citation id="cite1" position="section_introduction">
+      <reference_id>ref1</reference_id>
+      <context>neural network based language models significantly outperform N-gram models</context>
+    </citation>
+  </citations>
+
+</paper>

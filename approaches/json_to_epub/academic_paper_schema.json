@@ -1,0 +1,324 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/academic-paper-schema.json",
+  "title": "Academic Paper Structured Format",
+  "description": "JSON schema for structured representation of academic papers optimized for high-quality ePub generation",
+  "type": "object",
+  "required": ["metadata", "sections"],
+  "properties": {
+    "metadata": {
+      "type": "object",
+      "required": ["title", "authors", "abstract"],
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "Complete, untruncated paper title",
+          "minLength": 10
+        },
+        "authors": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["name", "affiliation"],
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Full author name"
+              },
+              "affiliation": {
+                "type": "string",
+                "description": "Institution or organization"
+              },
+              "email": {
+                "type": "string",
+                "format": "email",
+                "description": "Contact email address"
+              },
+              "orcid": {
+                "type": "string",
+                "pattern": "^\\d{4}-\\d{4}-\\d{4}-\\d{3}[\\dX]$",
+                "description": "ORCID identifier"
+              },
+              "corresponding": {
+                "type": "boolean",
+                "description": "Whether this is the corresponding author"
+              }
+            }
+          }
+        },
+        "abstract": {
+          "type": "string",
+          "description": "Full abstract text without fragmentation",
+          "minLength": 50
+        },
+        "keywords": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Research keywords and topics"
+        },
+        "publication_info": {
+          "type": "object",
+          "properties": {
+            "venue": {
+              "type": "string",
+              "description": "Conference, journal, or publication venue"
+            },
+            "date": {
+              "type": "string",
+              "format": "date",
+              "description": "Publication date"
+            },
+            "doi": {
+              "type": "string",
+              "description": "Digital Object Identifier"
+            },
+            "arxiv_id": {
+              "type": "string",
+              "pattern": "^\\d{4}\\.\\d{4,5}(v\\d+)?$",
+              "description": "arXiv identifier"
+            },
+            "document_class": {
+              "type": "string",
+              "enum": ["conference paper", "journal article", "workshop paper", "preprint", "thesis", "technical report"],
+              "description": "Type of academic document"
+            }
+          }
+        }
+      }
+    },
+    "sections": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "title", "level", "content"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "description": "Unique section identifier"
+          },
+          "title": {
+            "type": "string",
+            "description": "Section title with numbering"
+          },
+          "level": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 4,
+            "description": "Heading level (1=h1, 2=h2, etc.)"
+          },
+          "content": {
+            "type": "string",
+            "description": "Clean, continuous text content"
+          },
+          "subsections": {
+            "type": "array",
+            "items": {
+              "$ref": "#/properties/sections/items"
+            },
+            "description": "Nested subsections"
+          }
+        }
+      }
+    },
+    "tables": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "caption", "headers", "rows"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^table\\d+$",
+            "description": "Unique table identifier"
+          },
+          "caption": {
+            "type": "string",
+            "description": "Table caption or title"
+          },
+          "position": {
+            "type": "string",
+            "pattern": "^(after_section_|before_section_)[a-z0-9_.]+$",
+            "description": "Where to place table relative to sections"
+          },
+          "headers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Column headers"
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "description": "Table data rows"
+          },
+          "styling": {
+            "type": "string",
+            "enum": ["comparison-table", "results-table", "examples-table", "data-table", "semantic-syntactic-table"],
+            "description": "Visual styling hint for ePub generation"
+          },
+          "table_type": {
+            "type": "string",
+            "enum": ["comparison", "results", "examples", "data", "summary"],
+            "description": "Semantic table type"
+          }
+        }
+      }
+    },
+    "figures": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "caption"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^figure\\d+$",
+            "description": "Unique figure identifier"
+          },
+          "caption": {
+            "type": "string",
+            "description": "Figure caption"
+          },
+          "position": {
+            "type": "string",
+            "pattern": "^(after_section_|before_section_)[a-z0-9_.]+$",
+            "description": "Where to place figure relative to sections"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["workflow_diagram", "architecture_diagram", "chart", "graph", "screenshot", "photo", "illustration"],
+            "description": "Type of figure"
+          },
+          "description": {
+            "type": "string",
+            "description": "Detailed description of figure content"
+          },
+          "source_reference": {
+            "type": "string",
+            "description": "Original filename or source reference"
+          },
+          "image_data": {
+            "type": "string",
+            "description": "Base64 encoded image data or file path"
+          },
+          "alt_text": {
+            "type": "string",
+            "description": "Accessibility description"
+          },
+          "width_hint": {
+            "type": "string",
+            "enum": ["full", "half", "quarter", "auto"],
+            "description": "Suggested display width"
+          }
+        }
+      }
+    },
+    "equations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "content"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^eq\\d+$",
+            "description": "Unique equation identifier"
+          },
+          "content": {
+            "type": "string",
+            "description": "LaTeX or MathML equation content"
+          },
+          "description": {
+            "type": "string",
+            "description": "Plain text explanation of equation"
+          },
+          "position": {
+            "type": "string",
+            "pattern": "^section_[a-z0-9_]+_paragraph_\\d+$",
+            "description": "Precise position within document"
+          }
+        }
+      }
+    },
+    "references": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "authors", "title", "year"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^ref\\w+$",
+            "description": "Unique reference identifier"
+          },
+          "authors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "List of author names"
+          },
+          "title": {
+            "type": "string",
+            "description": "Publication title"
+          },
+          "venue": {
+            "type": "string",
+            "description": "Journal, conference, or publication venue"
+          },
+          "year": {
+            "type": "string",
+            "pattern": "^\\d{4}$",
+            "description": "Publication year"
+          },
+          "pages": {
+            "type": "string",
+            "description": "Page numbers"
+          },
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "description": "URL to publication"
+          },
+          "doi": {
+            "type": "string",
+            "description": "Digital Object Identifier"
+          }
+        }
+      }
+    },
+    "citations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["text", "ref_id", "position"],
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "Citation text as it appears in document"
+          },
+          "ref_id": {
+            "type": "string",
+            "description": "Reference to bibliography entry"
+          },
+          "position": {
+            "type": "string",
+            "pattern": "^section_[a-z0-9_]+_paragraph_\\d+$",
+            "description": "Location of citation in document"
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,223 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           xmlns:xhtml="http://www.w3.org/1999/xhtml"
+           xmlns:mathml="http://www.w3.org/1998/Math/MathML"
+           targetNamespace="http://example.com/academic-paper"
+           xmlns:ap="http://example.com/academic-paper"
+           elementFormDefault="qualified">
+
+  <!-- Import XHTML and MathML schemas for embedded content -->
+  <xs:import namespace="http://www.w3.org/1999/xhtml" 
+             schemaLocation="http://www.w3.org/2002/08/xhtml/xhtml1-strict.xsd"/>
+  <xs:import namespace="http://www.w3.org/1998/Math/MathML"
+             schemaLocation="http://www.w3.org/Math/XMLSchema/mathml3/mathml3.xsd"/>
+
+  <!-- Root element -->
+  <xs:element name="paper" type="ap:PaperType"/>
+
+  <!-- Paper structure -->
+  <xs:complexType name="PaperType">
+    <xs:sequence>
+      <xs:element name="metadata" type="ap:MetadataType"/>
+      <xs:element name="sections" type="ap:SectionsType"/>
+      <xs:element name="tables" type="ap:TablesType" minOccurs="0"/>
+      <xs:element name="figures" type="ap:FiguresType" minOccurs="0"/>
+      <xs:element name="equations" type="ap:EquationsType" minOccurs="0"/>
+      <xs:element name="references" type="ap:ReferencesType" minOccurs="0"/>
+      <xs:element name="citations" type="ap:CitationsType" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Metadata -->
+  <xs:complexType name="MetadataType">
+    <xs:sequence>
+      <xs:element name="title" type="xs:string"/>
+      <xs:element name="authors" type="ap:AuthorsType"/>
+      <xs:element name="abstract" type="ap:RichContentType"/>
+      <xs:element name="keywords" type="ap:KeywordsType" minOccurs="0"/>
+      <xs:element name="publication_info" type="ap:PublicationInfoType" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Authors -->
+  <xs:complexType name="AuthorsType">
+    <xs:sequence>
+      <xs:element name="author" type="ap:AuthorType" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="AuthorType">
+    <xs:sequence>
+      <xs:element name="name" type="xs:string"/>
+      <xs:element name="affiliation" type="xs:string"/>
+      <xs:element name="email" type="xs:string" minOccurs="0"/>
+      <xs:element name="orcid" type="xs:string" minOccurs="0"/>
+      <xs:element name="corresponding" type="xs:boolean" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Keywords -->
+  <xs:complexType name="KeywordsType">
+    <xs:sequence>
+      <xs:element name="keyword" type="xs:string" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Publication Info -->
+  <xs:complexType name="PublicationInfoType">
+    <xs:sequence>
+      <xs:element name="venue" type="xs:string" minOccurs="0"/>
+      <xs:element name="date" type="xs:date" minOccurs="0"/>
+      <xs:element name="doi" type="xs:string" minOccurs="0"/>
+      <xs:element name="arxiv_id" type="xs:string" minOccurs="0"/>
+      <xs:element name="document_class" type="xs:string" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Sections -->
+  <xs:complexType name="SectionsType">
+    <xs:sequence>
+      <xs:element name="section" type="ap:SectionType" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="SectionType">
+    <xs:sequence>
+      <xs:element name="title" type="xs:string"/>
+      <xs:element name="content" type="ap:RichContentType"/>
+      <xs:element name="subsections" type="ap:SubsectionsType" minOccurs="0"/>
+    </xs:sequence>
+    <xs:attribute name="id" type="xs:ID" use="required"/>
+    <xs:attribute name="level" type="xs:positiveInteger" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="SubsectionsType">
+    <xs:sequence>
+      <xs:element name="subsection" type="ap:SectionType" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Rich Content Type - allows XHTML and MathML -->
+  <xs:complexType name="RichContentType" mixed="true">
+    <xs:choice minOccurs="0" maxOccurs="unbounded">
+      <xs:any namespace="http://www.w3.org/1999/xhtml" processContents="lax"/>
+      <xs:any namespace="http://www.w3.org/1998/Math/MathML" processContents="lax"/>
+    </xs:choice>
+  </xs:complexType>
+
+  <!-- Tables -->
+  <xs:complexType name="TablesType">
+    <xs:sequence>
+      <xs:element name="table" type="ap:TableType" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="TableType">
+    <xs:sequence>
+      <xs:element name="caption" type="xs:string"/>
+      <xs:element name="headers" type="ap:TableHeadersType"/>
+      <xs:element name="rows" type="ap:TableRowsType"/>
+    </xs:sequence>
+    <xs:attribute name="id" type="xs:ID" use="required"/>
+    <xs:attribute name="position" type="xs:string"/>
+    <xs:attribute name="styling" type="xs:string"/>
+  </xs:complexType>
+
+  <xs:complexType name="TableHeadersType">
+    <xs:sequence>
+      <xs:element name="header" type="xs:string" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="TableRowsType">
+    <xs:sequence>
+      <xs:element name="row" type="ap:TableRowType" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="TableRowType">
+    <xs:sequence>
+      <xs:element name="cell" type="xs:string" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Figures -->
+  <xs:complexType name="FiguresType">
+    <xs:sequence>
+      <xs:element name="figure" type="ap:FigureType" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="FigureType">
+    <xs:sequence>
+      <xs:element name="caption" type="xs:string"/>
+      <xs:element name="description" type="xs:string" minOccurs="0"/>
+      <xs:element name="alt_text" type="xs:string" minOccurs="0"/>
+      <xs:element name="image_data" type="xs:string" minOccurs="0"/>
+      <xs:element name="source_reference" type="xs:string" minOccurs="0"/>
+    </xs:sequence>
+    <xs:attribute name="id" type="xs:ID" use="required"/>
+    <xs:attribute name="position" type="xs:string"/>
+    <xs:attribute name="type" type="xs:string"/>
+  </xs:complexType>
+
+  <!-- Equations -->
+  <xs:complexType name="EquationsType">
+    <xs:sequence>
+      <xs:element name="equation" type="ap:EquationType" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="EquationType">
+    <xs:sequence>
+      <xs:element name="content" type="ap:RichContentType"/>
+      <xs:element name="description" type="xs:string" minOccurs="0"/>
+      <xs:element name="latex_source" type="xs:string" minOccurs="0"/>
+    </xs:sequence>
+    <xs:attribute name="id" type="xs:ID" use="required"/>
+    <xs:attribute name="position" type="xs:string"/>
+  </xs:complexType>
+
+  <!-- References -->
+  <xs:complexType name="ReferencesType">
+    <xs:sequence>
+      <xs:element name="reference" type="ap:ReferenceType" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="ReferenceType">
+    <xs:sequence>
+      <xs:element name="authors" type="ap:ReferenceAuthorsType"/>
+      <xs:element name="title" type="xs:string"/>
+      <xs:element name="venue" type="xs:string" minOccurs="0"/>
+      <xs:element name="year" type="xs:gYear"/>
+      <xs:element name="doi" type="xs:string" minOccurs="0"/>
+      <xs:element name="url" type="xs:anyURI" minOccurs="0"/>
+      <xs:element name="pages" type="xs:string" minOccurs="0"/>
+    </xs:sequence>
+    <xs:attribute name="id" type="xs:ID" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="ReferenceAuthorsType">
+    <xs:sequence>
+      <xs:element name="author" type="xs:string" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Citations -->
+  <xs:complexType name="CitationsType">
+    <xs:sequence>
+      <xs:element name="citation" type="ap:CitationType" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="CitationType">
+    <xs:sequence>
+      <xs:element name="reference_id" type="xs:IDREF"/>
+      <xs:element name="context" type="xs:string" minOccurs="0"/>
+    </xs:sequence>
+    <xs:attribute name="id" type="xs:ID" use="required"/>
+    <xs:attribute name="position" type="xs:string"/>
+  </xs:complexType>
+
+</xs:schema>
