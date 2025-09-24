@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import argparse
 import zipfile
 import re
 from pathlib import Path
@@ -424,14 +425,19 @@ body {
         return self._escape_html(text)
 
 def main():
-    """Test XML to ePub conversion with XSLT"""
-    converter = XmlToEpubConverter()
+    """XML to ePub conversion with XSLT"""
+    parser = argparse.ArgumentParser(description='Convert XML file to ePub format')
+    parser.add_argument('xml_file', help='Path to the XML file to convert')
     
-    xml_file = "word2vec_test.xml"
+    args = parser.parse_args()
+    
+    xml_file = args.xml_file
     
     if not Path(xml_file).exists():
         print(f"❌ XML file not found: {xml_file}")
         return
+    
+    converter = XmlToEpubConverter()
     
     print("🚀 XML-to-ePub Converter (XSLT)")
     print("=" * 50)
