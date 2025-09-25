@@ -1,0 +1,309 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<paper xmlns="http://example.com/academic-paper"
+       xmlns:xhtml="http://www.w3.org/1999/xhtml"
+       xmlns:mathml="http://www.w3.org/1998/Math/MathML">
+  <metadata>
+    <title>Efficient Estimation of Word Representations in Vector Space</title>
+    <authors>
+      <author>
+        <name>Tomas Mikolov</name>
+        <affiliation>Google Inc., Mountain View, CA</affiliation>
+        <email>tmikolov@google.com</email>
+        <corresponding>true</corresponding>
+      </author>
+      <author>
+        <name>Kai Chen</name>
+        <affiliation>Google Inc., Mountain View, CA</affiliation>
+        <email>kaichen@google.com</email>
+      </author>
+      <author>
+        <name>Greg Corrado</name>
+        <affiliation>Google Inc., Mountain View, CA</affiliation>
+        <email>gcorrado@google.com</email>
+      </author>
+      <author>
+        <name>Jeffrey Dean</name>
+        <affiliation>Google Inc., Mountain View, CA</affiliation>
+        <email>jeff@google.com</email>
+      </author>
+    </authors>
+    <abstract>
+      <xhtml:p>We propose two novel model architectures for computing continuous vector representations of words from very large data sets. The quality of these representations is measured in a word similarity task, and the results are compared to the previously best performing techniques based on different types of neural networks.</xhtml:p>
+    </abstract>
+    <keywords>
+      <keyword>word embeddings</keyword>
+      <keyword>neural networks</keyword>
+      <keyword>natural language processing</keyword>
+      <keyword>vector representations</keyword>
+    </keywords>
+    <publication_info>
+      <venue>arXiv preprint</venue>
+      <date>2013-01-16</date>
+      <arxiv_id>1301.3781</arxiv_id>
+      <document_class>article</document_class>
+    </publication_info>
+  </metadata>
+  
+  <sections>
+    <section id="introduction" level="1">
+      <title>Introduction</title>
+      <content>
+        <xhtml:p>Many current NLP systems and techniques treat words as atomic units - there is no notion of similarity between words, as these are represented as indices in a vocabulary. This choice has several good reasons - simplicity, robustness and the observation that simple models trained on huge amounts of data outperform complex systems trained on less data.</xhtml:p>
+        <xhtml:p>However, the simple techniques are at their limits in many tasks. For example, the amount of relevant in-domain data for automatic speech recognition is limited - the performance is usually dominated by the size of high quality transcribed speech data (often just millions of words).</xhtml:p>
+      </content>
+      <subsections>
+        <subsection id="goals" level="2">
+          <title>Goals of the Paper</title>
+          <content>
+            <xhtml:p>The main goal of this paper is to introduce techniques that can be used for learning high-quality word vectors from huge data sets with billions of words, and with millions of words in the vocabulary.</xhtml:p>
+          </content>
+        </subsection>
+        <subsection id="previous-work" level="2">
+          <title>Previous Work</title>
+          <content>
+            <xhtml:p>Representation of words as continuous vectors has a long history. A very popular model architecture for estimating neural network language model (NNLM) was proposed, where a feedforward neural network with a linear projection layer and a non-linear hidden layer was used to learn jointly the word vector representation and a statistical language model.</xhtml:p>
+          </content>
+        </subsection>
+      </subsections>
+    </section>
+    
+    <section id="model-architectures" level="1">
+      <title>Model Architectures</title>
+      <content>
+        <xhtml:p>Many different types of models were proposed for estimating continuous representations of words, including the well-known Latent Semantic Analysis (LSA) and Latent Dirichlet Allocation (LDA). In this paper, we focus on distributed representations of words learned by neural networks.</xhtml:p>
+        <xhtml:p>For all the following models, the training complexity is proportional to:</xhtml:p>
+        <mathml:math display="block">
+          <mathml:mrow>
+            <mathml:mi>O</mathml:mi>
+            <mathml:mo>=</mathml:mo>
+            <mathml:mi>E</mathml:mi>
+            <mathml:mo>×</mathml:mo>
+            <mathml:mi>T</mathml:mi>
+            <mathml:mo>×</mathml:mo>
+            <mathml:mi>Q</mathml:mi>
+          </mathml:mrow>
+        </mathml:math>
+        <xhtml:p>where <mathml:math display="inline"><mathml:mi>E</mathml:mi></mathml:math> is number of the training epochs, <mathml:math display="inline"><mathml:mi>T</mathml:mi></mathml:math> is the number of the words in the training set and <mathml:math display="inline"><mathml:mi>Q</mathml:mi></mathml:math> is defined further for each model architecture.</xhtml:p>
+      </content>
+      <subsections>
+        <subsection id="nnlm" level="2">
+          <title>Feedforward Neural Net Language Model (NNLM)</title>
+          <content>
+            <xhtml:p>The probabilistic feedforward neural network language model has been proposed. It consists of input, projection, hidden and output layers.</xhtml:p>
+          </content>
+        </subsection>
+        <subsection id="rnnlm" level="2">
+          <title>Recurrent Neural Net Language Model (RNNLM)</title>
+          <content>
+            <xhtml:p>Recurrent neural network based language model has been proposed to overcome certain limitations of the feedforward NNLM.</xhtml:p>
+          </content>
+        </subsection>
+      </subsections>
+    </section>
+    
+    <section id="results" level="1">
+      <title>Results</title>
+      <content>
+        <xhtml:p>To compare the quality of different versions of word vectors, previous papers typically use a table showing example words and their most similar words, and understand them intuitively.</xhtml:p>
+      </content>
+    </section>
+    
+    <section id="conclusion" level="1">
+      <title>Conclusion</title>
+      <content>
+        <xhtml:p>In this paper we studied the quality of vector representations of words derived by various models on a collection of syntactic and semantic language tasks. We observed that it is possible to train high quality word vectors using very simple model architectures.</xhtml:p>
+      </content>
+    </section>
+  </sections>
+  
+  <tables>
+    <table id="table1" position="top">
+      <caption>Examples of five types of semantic and nine types of syntactic questions in the Semantic-Syntactic Word Relationship test set.</caption>
+      <headers>
+        <header>Type of relationship</header>
+        <header>Word Pair 1</header>
+        <header>Word Pair 2</header>
+      </headers>
+      <rows>
+        <row>
+          <cell>Common capital city</cell>
+          <cell>Athens - Greece</cell>
+          <cell>Oslo - Norway</cell>
+        </row>
+        <row>
+          <cell>Currency</cell>
+          <cell>Angola - kwanza</cell>
+          <cell>Iran - rial</cell>
+        </row>
+        <row>
+          <cell>Man-Woman</cell>
+          <cell>brother - sister</cell>
+          <cell>grandson - granddaughter</cell>
+        </row>
+      </rows>
+    </table>
+    
+    <table id="table2" position="top">
+      <caption>Accuracy on subset of the Semantic-Syntactic Word Relationship test set, using word vectors from the CBOW architecture with limited vocabulary.</caption>
+      <headers>
+        <header>Dimensionality / Training words</header>
+        <header>24M</header>
+        <header>49M</header>
+        <header>98M</header>
+        <header>196M</header>
+      </headers>
+      <rows>
+        <row>
+          <cell>50</cell>
+          <cell>13.4</cell>
+          <cell>15.7</cell>
+          <cell>18.6</cell>
+          <cell>19.1</cell>
+        </row>
+        <row>
+          <cell>100</cell>
+          <cell>19.4</cell>
+          <cell>23.1</cell>
+          <cell>27.8</cell>
+          <cell>28.7</cell>
+        </row>
+        <row>
+          <cell>300</cell>
+          <cell>23.2</cell>
+          <cell>29.2</cell>
+          <cell>35.3</cell>
+          <cell>38.6</cell>
+        </row>
+      </rows>
+    </table>
+  </tables>
+  
+  <figures>
+    <figure id="fig1" position="center" type="diagram">
+      <caption>New model architectures. The CBOW architecture predicts the current word based on the context, and the Skip-gram predicts surrounding words given the current word.</caption>
+      <description>Diagram showing two neural network architectures side by side: CBOW (Continuous Bag-of-Words) and Skip-gram models with their input, projection, and output layers.</description>
+      <alt_text>Comparison diagram of CBOW and Skip-gram neural network architectures</alt_text>
+      <source_reference>efficient-models</source_reference>
+    </figure>
+  </figures>
+  
+  <equations>
+    <equation id="eq1" position="inline">
+      <content>
+        <mathml:math display="block">
+          <mathml:mrow>
+            <mathml:mi>O</mathml:mi>
+            <mathml:mo>=</mathml:mo>
+            <mathml:mi>E</mathml:mi>
+            <mathml:mo>×</mathml:mo>
+            <mathml:mi>T</mathml:mi>
+            <mathml:mo>×</mathml:mo>
+            <mathml:mi>Q</mathml:mi>
+          </mathml:mrow>
+        </mathml:math>
+      </content>
+      <description>Training complexity formula</description>
+      <latex_source>O = E \times T \times Q</latex_source>
+    </equation>
+    
+    <equation id="eq2" position="inline">
+      <content>
+        <mathml:math display="block">
+          <mathml:mrow>
+            <mathml:mi>Q</mathml:mi>
+            <mathml:mo>=</mathml:mo>
+            <mathml:mi>N</mathml:mi>
+            <mathml:mo>×</mathml:mo>
+            <mathml:mi>D</mathml:mi>
+            <mathml:mo>+</mathml:mo>
+            <mathml:mi>N</mathml:mi>
+            <mathml:mo>×</mathml:mo>
+            <mathml:mi>D</mathml:mi>
+            <mathml:mo>×</mathml:mo>
+            <mathml:mi>H</mathml:mi>
+            <mathml:mo>+</mathml:mo>
+            <mathml:mi>H</mathml:mi>
+            <mathml:mo>×</mathml:mo>
+            <mathml:mi>V</mathml:mi>
+          </mathml:mrow>
+        </mathml:math>
+      </content>
+      <description>NNLM computational complexity</description>
+      <latex_source>Q = N \times D + N \times D \times H + H \times V</latex_source>
+    </equation>
+    
+    <equation id="eq3" position="inline">
+      <content>
+        <mathml:math display="block">
+          <mathml:mrow>
+            <mathml:mi>Q</mathml:mi>
+            <mathml:mo>=</mathml:mo>
+            <mathml:mi>H</mathml:mi>
+            <mathml:mo>×</mathml:mo>
+            <mathml:mi>H</mathml:mi>
+            <mathml:mo>+</mathml:mo>
+            <mathml:mi>H</mathml:mi>
+            <mathml:mo>×</mathml:mo>
+            <mathml:mi>V</mathml:mi>
+          </mathml:mrow>
+        </mathml:math>
+      </content>
+      <description>RNN computational complexity</description>
+      <latex_source>Q = H \times H + H \times V</latex_source>
+    </equation>
+  </equations>
+  
+  <references>
+    <reference id="ref1">
+      <authors>
+        <author>Y. Bengio</author>
+        <author>R. Ducharme</author>
+        <author>P. Vincent</author>
+      </authors>
+      <title>A neural probabilistic language model</title>
+      <venue>Journal of Machine Learning Research</venue>
+      <year>2003</year>
+      <pages>1137-1155</pages>
+    </reference>
+    
+    <reference id="ref2">
+      <authors>
+        <author>R. Collobert</author>
+        <author>J. Weston</author>
+      </authors>
+      <title>A Unified Architecture for Natural Language Processing: Deep Neural Networks with Multitask Learning</title>
+      <venue>International Conference on Machine Learning, ICML</venue>
+      <year>2008</year>
+    </reference>
+    
+    <reference id="ref3">
+      <authors>
+        <author>T. Mikolov</author>
+        <author>M. Karafiát</author>
+        <author>L. Burget</author>
+        <author>J. Černocký</author>
+        <author>S. Khudanpur</author>
+      </authors>
+      <title>Recurrent neural network based language model</title>
+      <venue>Proceedings of Interspeech</venue>
+      <year>2010</year>
+    </reference>
+  </references>
+  
+  <citations>
+    <citation id="cite1" position="section1">
+      <reference_id>ref1</reference_id>
+      <context>neural network language model significantly outperform N-gram models</context>
+    </citation>
+    
+    <citation id="cite2" position="section2">
+      <reference_id>ref2</reference_id>
+      <context>word vectors can be used to significantly improve and simplify many NLP applications</context>
+    </citation>
+    
+    <citation id="cite3" position="section3">
+      <reference_id>ref3</reference_id>
+      <context>recurrent neural network based language model has been proposed</context>
+    </citation>
+  </citations>
+</paper>

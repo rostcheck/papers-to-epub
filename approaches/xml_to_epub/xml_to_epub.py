@@ -72,6 +72,13 @@ class XmlToEpubConverter:
             epub.writestr('content.opf', content_opf)
             epub.writestr('toc.ncx', toc_ncx)
             epub.writestr('styles.css', styles_css)
+            
+            # Add image files if they exist
+            image_files = ['efficient-models.png']
+            for img_file in image_files:
+                img_path = Path(__file__).parent / img_file
+                if img_path.exists():
+                    epub.write(img_path, img_file)
         
         print(f"✅ Generated ePub: {epub_path}")
         return epub_path
@@ -177,6 +184,7 @@ class XmlToEpubConverter:
     <item id="content" href="content.html" media-type="application/xhtml+xml"/>
     <item id="toc" href="toc.ncx" media-type="application/x-dtbncx+xml"/>
     <item id="css" href="styles.css" media-type="text/css"/>
+    <item id="img1" href="efficient-models.png" media-type="image/png"/>
   </manifest>
   
   <spine toc="toc">

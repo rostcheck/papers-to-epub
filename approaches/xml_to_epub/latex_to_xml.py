@@ -7,6 +7,8 @@ from pathlib import Path
 class LatexToXmlConverter:
     def __init__(self):
         self.schema_file = Path(__file__).parent / "academic_paper_schema.xsd"
+        self.prompt_template_file = Path(__file__).parent / "prompt_template.txt"
+        self.xml_sample_file = Path(__file__).parent / "xml_sample.xml"
         self.max_attempts = 3
     
     def convert_latex_to_xml(self, latex_file, output_xml=None):
@@ -26,15 +28,17 @@ class LatexToXmlConverter:
         print(f"📄 Output: {output_xml}")
         print()
         
-        # Read schema content
-        schema_content = self._read_schema()
+        # Read template files
+        schema_content = self._read_file(self.schema_file)
+        prompt_template = self._read_file(self.prompt_template_file)
+        xml_sample = self._read_file(self.xml_sample_file)
         
         # Validation loop
         for attempt in range(1, self.max_attempts + 1):
             print(f"🔄 Attempt {attempt}/{self.max_attempts}")
             
             if attempt == 1:
-                success = self._initial_conversion(latex_path, output_path, schema_content)
+                success = self._initial_conversion(latex_path, output_path, prompt_template, schema_content, xml_sample)
             else:
                 # Get validation error from previous attempt
                 error_msg = self._validate_xml(output_path)
@@ -48,59 +52,15 @@ class LatexToXmlConverter:
         
         raise RuntimeError(f"Failed to convert LaTeX to valid XML after {self.max_attempts} attempts")
     
-    def _initial_conversion(self, latex_path, output_path, schema_content):
+    def _initial_conversion(self, latex_path, output_path, prompt_template, schema_content, xml_sample):
         """Initial LaTeX-to-XML conversion using Q Developer CLI"""
         
-        prompt = f"""Please read the LaTeX file '{latex_path}' and convert it to XML format that complies with the provided academic paper schema.
-
-REQUIREMENTS:
-1. Read and parse the entire LaTeX file
-2. Extract title, authors (with affiliations and emails), abstract, all sections and subsections
-3. Convert LaTeX math expressions to proper MathML format
-4. Use XHTML formatting for text content (paragraphs, emphasis, etc.)
-5. Create valid XML that validates against the schema
-6. Write the complete XML to '{output_path}'
-
-XML SCHEMA:
-{schema_content}
-
-EXAMPLE STRUCTURE:
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<paper xmlns="http://example.com/academic-paper"
-       xmlns:xhtml="http://www.w3.org/1999/xhtml"
-       xmlns:mathml="http://www.w3.org/1998/Math/MathML">
-  <metadata>
-    <title>Paper Title</title>
-    <authors>
-      <author>
-        <name>Author Name</name>
-        <affiliation>Institution</affiliation>
-        <email>email@example.com</email>
-      </author>
-    </authors>
-    <abstract>
-      <xhtml:p>Abstract content...</xhtml:p>
-    </abstract>
-  </metadata>
-  <sections>
-    <section id="intro" level="1">
-      <title>Introduction</title>
-      <content>
-        <xhtml:p>Content with <xhtml:em>emphasis</xhtml:em> and math:
-          <mathml:math display="inline">
-            <mathml:mi>x</mathml:mi>
-            <mathml:mo>=</mathml:mo>
-            <mathml:mi>y</mathml:mi>
-          </mathml:math>
-        </xhtml:p>
-      </content>
-    </section>
-  </sections>
-</paper>
-```
-
-Please create the complete XML file with all content from the LaTeX paper."""
+        prompt = prompt_template.format(
+            latex_file=latex_path,
+            output_file=output_path,
+            schema_content=schema_content,
+            xml_sample=xml_sample
+        )
         
         return self._run_q_developer(prompt)
     
@@ -212,13 +172,13 @@ Please fix the XML file to make it valid against the schema."""
         except Exception as e:
             return f"Validation error: {e}"
     
-    def _read_schema(self):
-        """Read the XML schema file"""
+    def _read_file(self, file_path):
+        """Read file content"""
         try:
-            with open(self.schema_file, 'r') as f:
+            with open(file_path, 'r', encoding='utf-8') as f:
                 return f.read()
         except Exception as e:
-            raise RuntimeError(f"Could not read schema file {self.schema_file}: {e}")
+            raise RuntimeError(f"Could not read file {file_path}: {e}")
 
 def main():
     """LaTeX-to-XML conversion with Q Developer CLI"""
@@ -239,7 +199,7 @@ def main():
     
     print("🚀 LaTeX-to-XML Converter using Q Developer CLI")
     print("=" * 60)
-    print("✨ Features: Q Developer cognitive parsing, MathML conversion, schema validation loop")
+    print("✨ Features: Template-based prompts, comprehensive XML sample, schema validation loop")
     print()
     
     try:

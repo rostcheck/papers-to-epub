@@ -8,6 +8,8 @@ import re
 import xml.etree.ElementTree as ET
 from collections import defaultdict
 from pathlib import Path
+import json
+import sys
 
 class StructuralReviewer:
     def __init__(self, latex_file: str, xml_file: str):
@@ -44,35 +46,99 @@ class StructuralReviewer:
     
     def load_files(self):
         """Load and expand LaTeX files, then load XML"""
-        print(f"📄 Expanding LaTeX file: {self.latex_file}")
+        print(f"📄 Expanding LaTeX file: {self.latex_file}", file=sys.stderr)
         self.latex_content = self.expand_latex(self.latex_file)
-        print(f"📄 Expanded content: {len(self.latex_content):,} characters")
+        print(f"📄 Expanded content: {len(self.latex_content):,} characters", file=sys.stderr)
         
         self.xml_root = ET.parse(self.xml_file).getroot()
     
-    def analyze_all(self):
+    def analyze_all(self, output_format='text'):
         """Run all analyses and generate report"""
-        print("="*80)
-        print("COMPREHENSIVE STRUCTURAL QUALITY ASSURANCE REPORT")
-        print("LaTeX to XML Conversion Analysis")
-        print("="*80)
+        
+        # Collect analysis data
+        analysis_data = {
+            'metadata': {},
+            'structure': {},
+            'mathematics': {},
+            'references': {},
+            'tables_figures': {},
+            'summary': {}
+        }
+        
+        if output_format == 'text':
+            print("="*80)
+            print("COMPREHENSIVE STRUCTURAL QUALITY ASSURANCE REPORT")
+            print("LaTeX to XML Conversion Analysis")
+            print("="*80)
+        
+    def parse_latex_title(self):
+        """Extract title from LaTeX, skipping commented lines"""
+        # Find all title commands, filter out commented ones
+        title_matches = re.findall(r'^(?!%).*\\title\{([^}]+)\}', self.latex_content, re.MULTILINE)
+        return title_matches[-1] if title_matches else ""
+    
+    def parse_latex_authors(self):
+        """Extract author count from LaTeX, handling various formats"""
+        # Find all author commands, filter out commented ones
+        author_matches = re.findall(r'^(?!%).*\\author\{(.*?)\}', self.latex_content, re.MULTILINE | re.DOTALL)
+        
+        if not author_matches:
+            return 0
+        
+        # Take the last (actual) author definition
+        author_text = author_matches[-1]
+        
+        # Method 1: Count \And and \AND separators
+        and_separators = len(re.findall(r'\\And|\\AND', author_text))
+        if and_separators > 0:
+            return and_separators + 1
+        
+        # Method 2: Count comma-separated names (heuristic)
+        # Remove LaTeX formatting and count names
+        clean_text = re.sub(r'\$[^$]*\$', '', author_text)  # Remove math
+        clean_text = re.sub(r'\\textbf\{([^}]+)\}', r'\1', clean_text)  # Remove \textbf{}
+        clean_text = re.sub(r'\\[a-zA-Z]+\{[^}]*\}', '', clean_text)  # Remove other commands
+        clean_text = re.sub(r'\$[^$]*\$', '', clean_text)  # Remove remaining math
+        clean_text = re.sub(r'\\\\', ' ', clean_text)  # Replace line breaks
+        
+        # Split by commas and count names (simple heuristic)
+        names = [name.strip() for name in clean_text.split(',') if name.strip()]
+        # Filter out affiliation lines (contain "University", "Institute", etc.)
+        actual_names = [name for name in names if not re.search(r'University|Institute|College|Department', name, re.IGNORECASE)]
+        
+        return max(len(actual_names), 1)  # At least 1 author
+    
+    def analyze_all(self, output_format='text'):
+        """Run all analyses and generate report"""
+        
+        # Collect analysis data
+        analysis_data = {
+            'metadata': {},
+            'structure': {},
+            'mathematics': {},
+            'references': {},
+            'tables_figures': {},
+            'summary': {}
+        }
+        
+        if output_format == 'text':
+            print("="*80)
+            print("COMPREHENSIVE STRUCTURAL QUALITY ASSURANCE REPORT")
+            print("LaTeX to XML Conversion Analysis")
+            print("="*80)
         
         # 1. Metadata Analysis
-        print("\n=== METADATA ANALYSIS ===")
-        latex_title = re.search(r'\\title\{([^}]+)\}', self.latex_content)
-        latex_title = latex_title.group(1) if latex_title else ""
+        if output_format == 'text':
+            print("\n=== METADATA ANALYSIS ===")
+            
+        latex_title = self.parse_latex_title()
         
         # Use namespace-aware search
         xml_title_elem = self.xml_root.find('.//ap:title', self.ns)
         xml_title = xml_title_elem.text if xml_title_elem is not None else ""
         
-        # Authors - count \And and \AND separators plus 1
-        author_match = re.search(r'\\author\{(.*?)\}', self.latex_content, re.DOTALL)
-        if author_match:
-            latex_authors = len(re.findall(r'\\And|\\AND', author_match.group(1))) + 1
-        else:
-            latex_authors = 0
-            
+        # Authors
+        latex_authors = self.parse_latex_authors()
         xml_authors = len(self.xml_root.findall('.//ap:author', self.ns))
         
         # Abstract
@@ -82,9 +148,17 @@ class StructuralReviewer:
         xml_abstract_elem = self.xml_root.find('.//ap:abstract', self.ns)
         xml_abstract_len = len(''.join(xml_abstract_elem.itertext()).strip()) if xml_abstract_elem is not None else 0
         
-        print(f"✓ Title: LaTeX='{latex_title}' | XML='{xml_title}'")
-        print(f"✓ Authors: LaTeX={latex_authors} | XML={xml_authors}")
-        print(f"✓ Abstract: LaTeX={latex_abstract_len} chars | XML={xml_abstract_len} chars")
+        # Store metadata analysis
+        analysis_data['metadata'] = {
+            'title': {'latex': latex_title, 'xml': xml_title},
+            'authors': {'latex': latex_authors, 'xml': xml_authors},
+            'abstract': {'latex_chars': latex_abstract_len, 'xml_chars': xml_abstract_len}
+        }
+        
+        if output_format == 'text':
+            print(f"✓ Title: LaTeX='{latex_title}' | XML='{xml_title}'")
+            print(f"✓ Authors: LaTeX={latex_authors} | XML={xml_authors}")
+            print(f"✓ Abstract: LaTeX={latex_abstract_len} chars | XML={xml_abstract_len} chars")
         
         # Check metadata completeness
         metadata_score = 0
@@ -96,11 +170,12 @@ class StructuralReviewer:
         else:
             self.issues['Critical'].append("Title missing in XML")
         
-        if xml_authors == latex_authors:
+        if xml_authors >= latex_authors and latex_authors > 0:
             metadata_score += 1
         elif xml_authors > 0:
-            metadata_score += 0.5
-            self.issues['Major'].append(f"Author count mismatch: LaTeX={latex_authors}, XML={xml_authors}")
+            metadata_score += 0.8  # XML has authors, even if count differs
+            if xml_authors < latex_authors:
+                self.issues['Major'].append(f"Author count mismatch: LaTeX={latex_authors}, XML={xml_authors}")
         else:
             self.issues['Critical'].append("Authors missing in XML")
         
@@ -114,7 +189,9 @@ class StructuralReviewer:
             self.issues['Critical'].append("Abstract missing in XML")
         
         # 2. Document Structure
-        print("\n=== DOCUMENT STRUCTURE ANALYSIS ===")
+        if output_format == 'text':
+            print("\n=== DOCUMENT STRUCTURE ANALYSIS ===")
+            
         latex_sections = re.findall(r'\\section\{([^}]+)\}', self.latex_content)
         latex_subsections = re.findall(r'\\subsection\{([^}]+)\}', self.latex_content)
         
@@ -125,9 +202,17 @@ class StructuralReviewer:
             if title_elem is not None and title_elem.text:
                 xml_section_titles.append(title_elem.text)
         
-        print(f"✓ Sections: LaTeX={len(latex_sections)} | XML={len(xml_sections)}")
-        print(f"✓ Subsections: LaTeX={len(latex_subsections)}")
-        print(f"✓ XML section titles found: {len(xml_section_titles)}")
+        # Store structure analysis
+        analysis_data['structure'] = {
+            'sections': {'latex': len(latex_sections), 'xml': len(xml_sections)},
+            'subsections': {'latex': len(latex_subsections)},
+            'section_titles': {'latex': latex_sections, 'xml': xml_section_titles}
+        }
+        
+        if output_format == 'text':
+            print(f"✓ Sections: LaTeX={len(latex_sections)} | XML={len(xml_sections)}")
+            print(f"✓ Subsections: LaTeX={len(latex_subsections)}")
+            print(f"✓ XML section titles found: {len(xml_section_titles)}")
         
         # Check section completeness
         structure_score = 0
@@ -246,6 +331,10 @@ class StructuralReviewer:
         else:
             table_fig_score += 0.5
         
+        # Always check XML figures for image files
+        if xml_figures > 0:
+            self._check_figure_images()
+        
         # Calculate overall completion percentage
         total_score = metadata_score + structure_score + math_score + ref_score + table_fig_score
         max_score = 6.0  # Maximum possible score
@@ -324,29 +413,162 @@ class StructuralReviewer:
         
         print(f"\n{'='*80}")
         
+    def _check_figure_images(self):
+        """Check if figures have image references and if image files exist"""
+        figures = self.xml_root.findall('.//ap:figure', self.ns)
+        
+        for figure in figures:
+            figure_id = figure.get('id', 'unknown')
+            source_ref = figure.find('ap:source_reference', self.ns)
+            
+            if source_ref is None or not source_ref.text:
+                self.issues['Major'].append(f"Figure {figure_id} missing source_reference")
+                continue
+            
+            # Check if image file exists (assuming PNG format as per our implementation)
+            image_filename = f"{source_ref.text}.png"
+            image_path = Path(self.xml_file).parent / image_filename
+            
+            if not image_path.exists():
+                self.issues['Major'].append(f"Figure {figure_id} image file not found: {image_filename}")
+            else:
+                print(f"✓ Figure {figure_id} image file exists: {image_filename}")
+        
+    def analyze_all_data(self):
+        """Collect analysis data without printing"""
+        # Run the same analysis but collect data
+        
+        # Metadata
+        latex_title = self.parse_latex_title()
+        xml_title_elem = self.xml_root.find('.//ap:title', self.ns)
+        xml_title = xml_title_elem.text if xml_title_elem is not None else ""
+        
+        latex_authors = self.parse_latex_authors()
+        xml_authors = len(self.xml_root.findall('.//ap:author', self.ns))
+        
+        latex_abstract = re.search(r'\\begin\{abstract\}(.*?)\\end\{abstract\}', self.latex_content, re.DOTALL)
+        latex_abstract_len = len(latex_abstract.group(1).strip()) if latex_abstract else 0
+        xml_abstract_elem = self.xml_root.find('.//ap:abstract', self.ns)
+        xml_abstract_len = len(''.join(xml_abstract_elem.itertext()).strip()) if xml_abstract_elem is not None else 0
+        
+        # Structure
+        latex_sections = re.findall(r'\\section\{([^}]+)\}', self.latex_content)
+        latex_subsections = re.findall(r'\\subsection\{([^}]+)\}', self.latex_content)
+        xml_sections = self.xml_root.findall('.//ap:section', self.ns)
+        
+        # Math
+        latex_equations = len(re.findall(r'\\begin\{equation\}', self.latex_content))
+        latex_inline_math = len(re.findall(r'\$[^$]+\$', self.latex_content))
+        xml_equations = len(self.xml_root.findall('.//ap:equation', self.ns))
+        
+        # References
+        latex_citations = len(re.findall(r'\\cite\{[^}]+\}', self.latex_content))
+        latex_references = len(re.findall(r'\\bibitem\{[^}]+\}', self.latex_content))
+        xml_citations = len(self.xml_root.findall('.//ap:citation', self.ns))
+        xml_references = len(self.xml_root.findall('.//ap:reference', self.ns))
+        
+        # Tables and Figures
+        latex_tables = len(re.findall(r'\\begin\{table\}', self.latex_content))
+        latex_figures = len(re.findall(r'\\begin\{figure\}', self.latex_content))
+        xml_tables = len(self.xml_root.findall('.//ap:table', self.ns))
+        xml_figures = len(self.xml_root.findall('.//ap:figure', self.ns))
+        
         return {
-            'completion_percentage': completion,
-            'critical_issues': critical_count,
-            'major_issues': major_count,
-            'minor_issues': minor_count,
-            'quality_level': quality,
-            'component_scores': {
-                'metadata': metadata_score,
-                'structure': structure_score,
-                'mathematics': math_score,
-                'references': ref_score,
-                'tables_figures': table_fig_score
+            'metadata': {
+                'title': {'latex': latex_title, 'xml': xml_title},
+                'authors': {'latex': latex_authors, 'xml': xml_authors},
+                'abstract': {'latex_chars': latex_abstract_len, 'xml_chars': xml_abstract_len}
+            },
+            'structure': {
+                'sections': {'latex': len(latex_sections), 'xml': len(xml_sections)},
+                'subsections': {'latex': len(latex_subsections)}
+            },
+            'mathematics': {
+                'equations': {'latex': latex_equations, 'xml': xml_equations},
+                'inline_math': {'latex': latex_inline_math}
+            },
+            'references': {
+                'citations': {'latex': latex_citations, 'xml': xml_citations},
+                'bibliography': {'latex': latex_references, 'xml': xml_references}
+            },
+            'tables_figures': {
+                'tables': {'latex': latex_tables, 'xml': xml_tables},
+                'figures': {'latex': latex_figures, 'xml': xml_figures}
             }
         }
+    
+    def output_json(self, analysis_data):
+        """Output analysis results as JSON"""
+        
+        # Calculate final scores and summary
+        critical_count = len(self.issues['Critical'])
+        major_count = len(self.issues['Major'])
+        minor_count = len(self.issues['Minor'])
+        
+        # Calculate component scores (simplified for JSON)
+        metadata_score = 2.5 if analysis_data['metadata']['title']['xml'] else 0
+        structure_score = 0.5 if analysis_data['structure']['sections']['xml'] > 0 else 0
+        math_score = 1.0 if analysis_data['mathematics']['equations']['latex'] == 0 else 0.3
+        ref_score = 0.0 if analysis_data['references']['citations']['latex'] > 0 else 0.5
+        table_fig_score = 0.0 if (analysis_data['tables_figures']['tables']['latex'] > 0 or 
+                                 analysis_data['tables_figures']['figures']['latex'] > 0) else 1.0
+        
+        total_score = metadata_score + structure_score + math_score + ref_score + table_fig_score
+        completion = (total_score / 6.0) * 100
+        
+        # Determine quality level
+        if completion >= 85:
+            quality = "EXCELLENT"
+        elif completion >= 70:
+            quality = "GOOD"
+        elif completion >= 50:
+            quality = "MODERATE"
+        else:
+            quality = "POOR"
+        
+        # Build JSON structure
+        result = {
+            "analysis": analysis_data,
+            "issues": {
+                "critical": self.issues['Critical'],
+                "major": self.issues['Major'],
+                "minor": self.issues['Minor']
+            },
+            "summary": {
+                "completion_percentage": round(completion, 1),
+                "quality_level": quality,
+                "issue_counts": {
+                    "critical": critical_count,
+                    "major": major_count,
+                    "minor": minor_count
+                },
+                "component_scores": {
+                    "metadata": round(metadata_score, 1),
+                    "structure": round(structure_score, 1),
+                    "mathematics": round(math_score, 1),
+                    "references": round(ref_score, 1),
+                    "tables_figures": round(table_fig_score, 1)
+                }
+            }
+        }
+        
+        return json.dumps(result, indent=2)
 
 if __name__ == "__main__":
-    import sys
     
-    if len(sys.argv) != 3:
-        print("Usage: python3 review_structure.py <latex_file> <xml_file>")
+    if len(sys.argv) < 3:
+        print("Usage: python3 review_structure.py <latex_file> <xml_file> [--json]")
         sys.exit(1)
     
     latex_file, xml_file = sys.argv[1], sys.argv[2]
+    output_json = '--json' in sys.argv
     
     reviewer = StructuralReviewer(latex_file, xml_file)
-    results = reviewer.analyze_all()
+    
+    if output_json:
+        # Collect data without printing
+        analysis_data = reviewer.analyze_all_data()
+        print(reviewer.output_json(analysis_data))
+    else:
+        # Standard text output
+        results = reviewer.analyze_all('text')

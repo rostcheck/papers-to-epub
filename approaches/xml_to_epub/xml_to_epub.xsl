@@ -42,6 +42,22 @@
         <!-- Sections -->
         <xsl:apply-templates select="ap:sections/ap:section"/>
 
+        <!-- Tables -->
+        <xsl:if test="ap:tables/ap:table">
+          <div class="tables">
+            <h2>Tables</h2>
+            <xsl:apply-templates select="ap:tables/ap:table"/>
+          </div>
+        </xsl:if>
+
+        <!-- Figures -->
+        <xsl:if test="ap:figures/ap:figure">
+          <div class="figures">
+            <h2>Figures</h2>
+            <xsl:apply-templates select="ap:figures/ap:figure"/>
+          </div>
+        </xsl:if>
+
         <!-- Equations -->
         <xsl:if test="ap:equations/ap:equation">
           <div class="equations">
@@ -187,6 +203,48 @@
 
   <xsl:template match="mathml:mtext">
     <xsl:value-of select="."/>
+  </xsl:template>
+
+  <!-- Tables -->
+  <xsl:template match="ap:table">
+    <div class="table" id="{@id}">
+      <table>
+        <caption><xsl:value-of select="ap:caption"/></caption>
+        <thead>
+          <tr>
+            <xsl:for-each select="ap:headers/ap:header">
+              <th><xsl:value-of select="."/></th>
+            </xsl:for-each>
+          </tr>
+        </thead>
+        <tbody>
+          <xsl:for-each select="ap:rows/ap:row">
+            <tr>
+              <xsl:for-each select="ap:cell">
+                <td><xsl:value-of select="."/></td>
+              </xsl:for-each>
+            </tr>
+          </xsl:for-each>
+        </tbody>
+      </table>
+    </div>
+  </xsl:template>
+
+  <!-- Figures -->
+  <xsl:template match="ap:figure">
+    <div class="figure" id="{@id}">
+      <figure>
+        <xsl:if test="ap:source_reference">
+          <img src="{ap:source_reference}.png" alt="{ap:alt_text}" class="figure-image"/>
+        </xsl:if>
+        <xsl:if test="not(ap:source_reference)">
+          <div class="figure-placeholder">
+            <p class="figure-description"><xsl:value-of select="ap:description"/></p>
+          </div>
+        </xsl:if>
+        <figcaption><xsl:value-of select="ap:caption"/></figcaption>
+      </figure>
+    </div>
   </xsl:template>
 
   <!-- Equations -->
