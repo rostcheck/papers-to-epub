@@ -1,53 +1,90 @@
-# LaTeX to ePub Converter with AI-Enhanced Processing
+# LaTeX to ePub Converter with Dual-Approach Processing
 
-Convert LaTeX academic papers to high-quality ePub format using cognitive AI processing and professional XML transformation.
+Convert LaTeX academic papers to high-quality ePub format using both rules-based and cognitive AI processing with professional XML transformation.
 
-## What it does
+## Current Architecture
 
-This advanced tool converts LaTeX academic papers to professional ePub format using a sophisticated pipeline that combines AI cognitive processing with industry-standard XML transformation. Features include:
-
-- **Cognitive LaTeX Processing**: Uses Amazon Q Developer CLI to intelligently parse LaTeX structure
-- **Schema-Validated XML**: Converts to structured XML format with automatic validation
-- **Professional XSLT Transformation**: Industry-standard XML-to-XHTML conversion
-- **MathML Support**: Proper mathematical expression rendering in ePub readers
-- **Validation Loop**: Automatic error detection and correction
-- **Mobile-Optimized Output**: Professional ePub format for all devices
-
-## Pipeline Architecture
-
-### 🎯 **LaTeX → XML → ePub Pipeline**
+### 🎯 **Dual LaTeX → XML → ePub Pipeline**
 ```
-LaTeX Source → Q Developer CLI → Structured XML → Schema Validation → XSLT → Professional ePub
+LaTeX Source → [Rules-Based OR Cognitive] → Structured XML → XSLT → Professional ePub
 ```
 
-### 🤖 **Cognitive Processing**
-- **Q Developer CLI**: Intelligently parses LaTeX structure and content
-- **Schema Compliance**: Generates XML that validates against academic paper schema
-- **Auto-Correction**: Validation loop fixes errors automatically
+### 📁 **File Structure**
+```
+approaches/xml_to_epub/
+├── latex_to_xml_rules_based.py     # Rules-based LaTeX parser (comprehensive extraction)
+├── latex_to_xml_cognitive.py       # AI-powered LaTeX parser (Q Developer CLI)
+├── xml_to_epub.py                  # XSLT-based XML to ePub converter
+├── structural_review/
+│   └── review_structure.py         # Single QA tool for both approaches
+├── output/                         # All generated files (gitignored)
+└── epub_books/                     # Generated ePub files
+```
 
-### 🎨 **Professional Output**
-- **XSLT Transformation**: Industry-standard XML-to-XHTML conversion
-- **MathML Rendering**: Proper mathematical expressions in ePub readers
-- **Academic Formatting**: Professional layout with proper sections, TOC, references
+## Two Conversion Approaches
+
+### 🔧 **Rules-Based Converter** (`latex_to_xml_rules_based.py`)
+- **Strengths**: Superior content extraction (equations, tables, figures, citations)
+- **Method**: Pure Python with regex parsing
+- **Output**: Comprehensive XML with all structural elements
+- **Best for**: Complete content preservation
+
+### 🧠 **Cognitive Converter** (`latex_to_xml_cognitive.py`)  
+- **Strengths**: Better metadata handling (authors, abstract, bibliography)
+- **Method**: Amazon Q Developer CLI with iterative improvement
+- **Output**: Clean XML with proper schema compliance
+- **Best for**: Metadata accuracy and schema compliance
+
+## Usage
+
+### Convert LaTeX to XML
+
+#### Rules-Based Approach
+```bash
+cd approaches/xml_to_epub
+python3 latex_to_xml_rules_based.py path/to/paper.tex [output_file.xml]
+```
+
+#### Cognitive Approach  
+```bash
+cd approaches/xml_to_epub
+python3 latex_to_xml_cognitive.py path/to/paper.tex [output_file.xml]
+```
+
+#### Convert XML to ePub
+```bash
+cd approaches/xml_to_epub
+python3 xml_to_epub.py output/paper.xml
+```
+
+### Quality Assessment
+```bash
+cd approaches/xml_to_epub
+python3 structural_review/review_structure.py path/to/paper.tex output/paper.xml
+```
+
+## Performance Comparison
+
+| Approach | Quality Score | Strengths | Weaknesses |
+|----------|---------------|-----------|------------|
+| **Rules-Based** | 55% | Complete content extraction (equations, tables, figures) | Limited metadata handling |
+| **Cognitive** | 55% | Perfect metadata and bibliography | Missing structural elements |
 
 ## Requirements
 
 - Python 3.x
-- Amazon Q Developer CLI (`q` command)
+- Amazon Q Developer CLI (`q` command) - for cognitive approach only
 - lxml (for XSLT processing)
-- Required Python packages: xml, pathlib, subprocess
 
 ## Installation
 
-### Amazon Q Developer CLI
-Follow the installation guide at: https://docs.aws.amazon.com/amazonq/latest/qdeveloper-ug/command-line-getting-started-installing.html
+### Amazon Q Developer CLI (for cognitive approach)
+Follow: https://docs.aws.amazon.com/amazonq/latest/qdeveloper-ug/command-line-getting-started-installing.html
 
 ### Python packages
 ```bash
 pip3 install lxml
 ```
-
-### Verify Q CLI Installation
 ```bash
 q --version
 ```

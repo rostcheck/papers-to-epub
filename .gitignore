@@ -11,3 +11,8 @@ __pycache__/
 epub_books*
 processing/
 LaTeX/
+
+# Generated output files
+approaches/xml_to_epub/output/
+*.xml
+*.epub

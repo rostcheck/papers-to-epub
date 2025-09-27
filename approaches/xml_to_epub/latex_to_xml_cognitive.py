@@ -28,7 +28,7 @@ class OptimizedCognitiveConverter:
             return False
             
         if output_file is None:
-            output_file = latex_path.stem + "-optimized.xml"
+            output_file = f"output/{latex_path.stem}_cognitive.xml"
             
         print(f"📄 Input: {latex_file}")
         print(f"📄 Output: {output_file}")
@@ -43,7 +43,7 @@ class OptimizedCognitiveConverter:
             print(f"🔄 Iteration {iteration}/{self.max_iterations}")
             print("-" * 40)
             
-            iter_file = f"{latex_path.stem}-opt-iter{iteration}.xml"
+            iter_file = f"output/{latex_path.stem}_cognitive_iter{iteration}.xml"
             
             # Create focused prompt
             prompt = self._create_focused_prompt(latex_file, iter_file, iteration)
@@ -172,14 +172,16 @@ Use the same XML structure with proper namespaces."""
             ], capture_output=True, text=True, cwd=Path.cwd(), timeout=30)
             
             if result.returncode == 0:
-                lines = result.stdout.strip().split('\n')
-                for line in lines:
-                    if line.startswith('{'):
+                # Find JSON in output (skip stderr messages)
+                output_lines = result.stdout.strip().split('\n')
+                for line in output_lines:
+                    line = line.strip()
+                    if line.startswith('{') and 'overall_score' in line:
                         data = json.loads(line)
                         return data.get('overall_score', 0)
                         
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"⚠️  Quality assessment error: {e}")
             
         return 0
 

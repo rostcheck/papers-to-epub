@@ -528,12 +528,9 @@ class StructuralReviewer:
         
         # Build JSON structure
         result = {
+            "overall_score": round(completion, 1),
             "analysis": analysis_data,
-            "issues": {
-                "critical": self.issues['Critical'],
-                "major": self.issues['Major'],
-                "minor": self.issues['Minor']
-            },
+            "issues": self.issues['Critical'] + self.issues['Major'] + self.issues['Minor'],
             "summary": {
                 "completion_percentage": round(completion, 1),
                 "quality_level": quality,
