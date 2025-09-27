@@ -373,9 +373,8 @@ class RulesBasedConverter:
         # Abstract
         if metadata['abstract']:
             abstract_elem = ET.SubElement(metadata_elem, 'abstract')
-            p_elem = ET.SubElement(abstract_elem, 'p')
-            p_elem.set('xmlns', 'http://www.w3.org/1999/xhtml')
-            p_elem.text = metadata['abstract']
+            # Convert citations in abstract too
+            self._add_content_with_citations(abstract_elem, metadata['abstract'])
     
     def _add_sections_to_xml(self, root: ET.Element, sections: List[Dict[str, Any]]) -> None:
         """Add sections to XML"""
@@ -390,9 +389,66 @@ class RulesBasedConverter:
             title_elem.text = section['title']
             
             content_elem = ET.SubElement(section_elem, 'content')
-            p_elem = ET.SubElement(content_elem, 'p')
-            p_elem.set('xmlns', 'http://www.w3.org/1999/xhtml')
-            p_elem.text = section['content']
+            
+            # Convert LaTeX citations to XML citation elements in content
+            self._add_content_with_citations(content_elem, section['content'])
+    
+    def _add_content_with_citations(self, parent_elem: ET.Element, text: str) -> None:
+        """Add content with embedded citation elements"""
+        p_elem = ET.SubElement(parent_elem, 'p')
+        p_elem.set('xmlns', 'http://www.w3.org/1999/xhtml')
+        
+        # Find all citation patterns and their positions
+        citation_pattern = r'\\cite(?:p)?\{([^}]+)\}'
+        matches = list(re.finditer(citation_pattern, text))
+        
+        if not matches:
+            # No citations, just add text
+            p_elem.text = text
+            return
+        
+        # Build content with citations
+        last_end = 0
+        
+        for match in matches:
+            # Add text before citation
+            before_text = text[last_end:match.start()]
+            if before_text:
+                if p_elem.text is None:
+                    p_elem.text = before_text
+                else:
+                    # Add to tail of last element
+                    if len(p_elem) > 0:
+                        if p_elem[-1].tail is None:
+                            p_elem[-1].tail = before_text
+                        else:
+                            p_elem[-1].tail += before_text
+                    else:
+                        p_elem.text += before_text
+            
+            # Add citation elements
+            cite_keys = match.group(1).split(',')
+            for key in cite_keys:
+                key = key.strip()
+                citation_elem = ET.SubElement(p_elem, 'citation')
+                citation_elem.text = key
+            
+            last_end = match.end()
+        
+        # Add remaining text after last citation
+        remaining_text = text[last_end:]
+        if remaining_text:
+            if len(p_elem) > 0:
+                if p_elem[-1].tail is None:
+                    p_elem[-1].tail = remaining_text
+                else:
+                    p_elem[-1].tail += remaining_text
+            else:
+                if p_elem.text is None:
+                    p_elem.text = remaining_text
+                else:
+                    p_elem.text += remaining_text
+
     
     def _add_references_to_xml(self, root: ET.Element, references: Dict[str, Any]) -> None:
         """Add references section to XML"""

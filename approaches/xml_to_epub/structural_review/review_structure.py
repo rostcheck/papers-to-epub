@@ -467,11 +467,12 @@ class StructuralReviewer:
     
     def _extract_latex_citations(self) -> List[str]:
         citations = []
-        matches = re.finditer(r'\\cite\{([^}]+)\}', self.latex_content)
+        # Handle both \cite{} and \citep{} commands
+        matches = re.finditer(r'\\cite(?:p)?\{([^}]+)\}', self.latex_content)
         for match in matches:
             cite_keys = match.group(1).split(',')
             citations.extend([key.strip() for key in cite_keys])
-        return list(set(citations))
+        return citations
     
     def _extract_latex_bibliography(self) -> List[str]:
         bibitem_pattern = r'\\bibitem\{([^}]+)\}'
@@ -507,8 +508,24 @@ class StructuralReviewer:
         return [eq.text for eq in equations if eq.text]
     
     def _extract_xml_citations(self) -> List[str]:
+        # Look for citation elements in the academic paper namespace
         citations = self.xml_root.findall('.//ap:citation', self.ns)
-        return [cite.text for cite in citations if cite.text]
+        if citations:
+            return [cite.text for cite in citations if cite.text]
+        
+        # Look for citation elements in XHTML namespace (they inherit from parent <p>)
+        xhtml_ns = {'xhtml': 'http://www.w3.org/1999/xhtml'}
+        citations_xhtml = self.xml_root.findall('.//xhtml:citation', xhtml_ns)
+        if citations_xhtml:
+            return [cite.text for cite in citations_xhtml if cite.text]
+        
+        # Fallback: look for any citation elements regardless of namespace
+        for elem in self.xml_root.iter():
+            if elem.tag.endswith('citation'):
+                citations_any = [elem.text for elem in self.xml_root.iter() if elem.tag.endswith('citation') and elem.text]
+                return citations_any
+        
+        return []
     
     def _extract_xml_bibliography(self) -> List[str]:
         refs = self.xml_root.findall('.//ap:reference', self.ns)
