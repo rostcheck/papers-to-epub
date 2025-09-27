@@ -1,244 +1,416 @@
 #!/usr/bin/env python3
+"""
+Rules-Based LaTeX to XML Converter
+High-quality engineering component for academic paper conversion
+"""
 
 import re
-import xml.etree.ElementTree as ET
+import json
+import sys
+from pathlib import Path
+from typing import Dict, List, Optional, Any
+from xml.etree import ElementTree as ET
 from xml.dom import minidom
 
-def extract_title_authors(content):
-    """Extract title and authors from LaTeX content"""
-    title_match = re.search(r'\\title\{([^}]+)\}', content)
-    title = title_match.group(1) if title_match else "Unknown Title"
+class RulesBasedConverter:
+    """
+    Rules-based LaTeX to XML converter using regex parsing.
+    Provides comprehensive content extraction with structured output.
+    """
     
-    # Extract author block
-    author_match = re.search(r'\\author\{(.*?)\}', content, re.DOTALL)
-    authors = []
-    
-    if author_match:
-        author_content = author_match.group(1)
-        # Split by \And or \AND
-        author_parts = re.split(r'\\And|\\AND', author_content)
+    def __init__(self):
+        self.latex_content = ""
+        self.extraction_stats = {}
         
-        for part in author_parts:
-            # Extract name and affiliation
-            lines = [line.strip() for line in part.strip().split('\\\\') if line.strip()]
-            if lines:
-                name = lines[0].strip()
-                affiliation = ""
-                email = ""
-                
-                for line in lines[1:]:
-                    if '\\texttt{' in line:
-                        email_match = re.search(r'\\texttt\{([^}]+)\}', line)
-                        if email_match:
-                            email = email_match.group(1)
-                    else:
-                        if affiliation:
-                            affiliation += ", "
-                        affiliation += line.strip()
-                
-                authors.append({
-                    'name': name,
-                    'affiliation': affiliation,
-                    'email': email
+    def load_latex(self, latex_file: str) -> None:
+        """Load and expand LaTeX content from file with recursive input handling"""
+        try:
+            self.latex_content = self._expand_latex(latex_file)
+        except Exception as e:
+            raise ValueError(f"Failed to load LaTeX file {latex_file}: {e}")
+    
+    def _expand_latex(self, main_file: str, base_dir: Path = None) -> str:
+        r"""Recursively expand \input{} commands in LaTeX files"""
+        if base_dir is None:
+            base_dir = Path(main_file).parent
+        
+        content = Path(main_file).read_text(encoding='utf-8')
+        
+        def replace_input(match):
+            filename = match.group(1)
+            if not filename.endswith('.tex'):
+                filename += '.tex'
+            
+            input_path = base_dir / filename
+            if input_path.exists():
+                return self._expand_latex(str(input_path), base_dir)
+            else:
+                return match.group(0)  # Keep original if file not found
+        
+        # Expand input files
+        expanded_content = re.sub(r'\\input\{([^}]+)\}', replace_input, content)
+        
+        # Filter LaTeX comments (but preserve escaped % characters)
+        filtered_content = self._filter_latex_comments(expanded_content)
+        
+        return filtered_content
+    
+    def _filter_latex_comments(self, content: str) -> str:
+        """Remove LaTeX comments while preserving escaped % characters"""
+        lines = content.split('\n')
+        filtered_lines = []
+        
+        for line in lines:
+            # Find the first unescaped % character
+            comment_pos = -1
+            i = 0
+            while i < len(line):
+                if line[i] == '%':
+                    # Check if it's escaped
+                    if i == 0 or line[i-1] != '\\':
+                        comment_pos = i
+                        break
+                elif line[i] == '\\' and i + 1 < len(line) and line[i+1] == '%':
+                    # Skip escaped %
+                    i += 1
+                i += 1
+            
+            if comment_pos >= 0:
+                # Remove comment part but keep the line break
+                filtered_lines.append(line[:comment_pos].rstrip())
+            else:
+                filtered_lines.append(line)
+        
+        return '\n'.join(filtered_lines)
+    
+    def extract_metadata(self) -> Dict[str, Any]:
+        """Extract title, authors, and abstract"""
+        metadata = {
+            'title': self._extract_title(),
+            'authors': self._extract_authors(),
+            'abstract': self._extract_abstract()
+        }
+        return metadata
+    
+    def extract_structure(self) -> Dict[str, Any]:
+        """Extract document structure (sections, subsections)"""
+        sections = self._extract_sections()
+        self.extraction_stats['sections'] = len(sections)
+        return {'sections': sections}
+    
+    def extract_mathematics(self) -> Dict[str, Any]:
+        """Extract equations and mathematical content"""
+        equations = self._extract_equations()
+        self.extraction_stats['equations'] = len(equations)
+        return {'equations': equations}
+    
+    def extract_references(self) -> Dict[str, Any]:
+        """Extract bibliography and citations"""
+        bibliography = self._extract_bibliography()
+        citations = self._extract_citations()
+        self.extraction_stats['bibliography'] = len(bibliography)
+        self.extraction_stats['citations'] = len(citations)
+        return {
+            'bibliography': bibliography,
+            'citations': citations
+        }
+    
+    def extract_tables_figures(self) -> Dict[str, Any]:
+        """Extract tables and figures"""
+        tables = self._extract_tables()
+        figures = self._extract_figures()
+        self.extraction_stats['tables'] = len(tables)
+        self.extraction_stats['figures'] = len(figures)
+        return {
+            'tables': tables,
+            'figures': figures
+        }
+    
+    def convert_to_json(self) -> Dict[str, Any]:
+        """Convert LaTeX to structured JSON representation"""
+        if not self.latex_content:
+            raise ValueError("No LaTeX content loaded")
+        
+        return {
+            'metadata': self.extract_metadata(),
+            'structure': self.extract_structure(),
+            'mathematics': self.extract_mathematics(),
+            'references': self.extract_references(),
+            'tables_figures': self.extract_tables_figures(),
+            'extraction_stats': self.extraction_stats
+        }
+    
+    def convert_to_xml(self, json_data: Dict[str, Any]) -> str:
+        """Convert JSON representation to XML string"""
+        root = ET.Element('paper')
+        root.set('xmlns', 'http://example.com/academic-paper')
+        root.set('xmlns:xhtml', 'http://www.w3.org/1999/xhtml')
+        root.set('xmlns:mathml', 'http://www.w3.org/1998/Math/MathML')
+        
+        # Add metadata
+        self._add_metadata_to_xml(root, json_data['metadata'])
+        
+        # Add sections
+        self._add_sections_to_xml(root, json_data['structure']['sections'])
+        
+        # Add references
+        self._add_references_to_xml(root, json_data['references'])
+        
+        # Add tables and figures
+        self._add_tables_figures_to_xml(root, json_data['tables_figures'])
+        
+        # Add equations
+        self._add_equations_to_xml(root, json_data['mathematics']['equations'])
+        
+        return self._prettify_xml(root)
+    
+    def get_extraction_summary(self) -> Dict[str, Any]:
+        """Get summary of extraction statistics"""
+        return {
+            'total_sections': self.extraction_stats.get('sections', 0),
+            'total_equations': self.extraction_stats.get('equations', 0),
+            'total_citations': self.extraction_stats.get('citations', 0),
+            'total_bibliography': self.extraction_stats.get('bibliography', 0),
+            'total_tables': self.extraction_stats.get('tables', 0),
+            'total_figures': self.extraction_stats.get('figures', 0)
+        }
+    
+    # Private extraction methods
+    def _extract_title(self) -> str:
+        """Extract document title"""
+        match = re.search(r'\\title\{([^}]+)\}', self.latex_content)
+        return match.group(1) if match else ""
+    
+    def _extract_authors(self) -> List[Dict[str, str]]:
+        """Extract author information"""
+        authors = []
+        author_match = re.search(r'\\author\{(.*?)\}', self.latex_content, re.DOTALL)
+        
+        if author_match:
+            author_content = author_match.group(1)
+            author_parts = re.split(r'\\And|\\AND', author_content)
+            
+            for part in author_parts:
+                lines = [line.strip() for line in part.strip().split('\\\\') if line.strip()]
+                if lines:
+                    name = lines[0].strip()
+                    affiliation = ""
+                    email = ""
+                    
+                    for line in lines[1:]:
+                        if '\\texttt{' in line:
+                            email_match = re.search(r'\\texttt\{([^}]+)\}', line)
+                            if email_match:
+                                email = email_match.group(1)
+                        else:
+                            if affiliation:
+                                affiliation += ", "
+                            affiliation += line.strip()
+                    
+                    authors.append({
+                        'name': name,
+                        'affiliation': affiliation,
+                        'email': email
+                    })
+        
+        return authors
+    
+    def _extract_abstract(self) -> str:
+        """Extract abstract content"""
+        match = re.search(r'\\begin\{abstract\}(.*?)\\end\{abstract\}', 
+                         self.latex_content, re.DOTALL)
+        return match.group(1).strip() if match else ""
+    
+    def _extract_sections(self) -> List[Dict[str, Any]]:
+        """Extract sections and subsections"""
+        sections = []
+        
+        # Find all section-level commands
+        section_pattern = r'\\(section|subsection|subsubsection)\{([^}]+)\}(.*?)(?=\\(?:section|subsection|subsubsection)\{|\\end\{document\}|$)'
+        matches = re.finditer(section_pattern, self.latex_content, re.DOTALL)
+        
+        for match in matches:
+            level = match.group(1)
+            title = match.group(2)
+            content = match.group(3).strip()
+            
+            sections.append({
+                'level': level,
+                'title': title,
+                'content': content
+            })
+        
+        return sections
+    
+    def _extract_equations(self) -> List[Dict[str, str]]:
+        """Extract mathematical equations"""
+        equations = []
+        
+        # Extract equation environments
+        eq_patterns = [
+            r'\\begin\{equation\}(.*?)\\end\{equation\}',
+            r'\\begin\{align\}(.*?)\\end\{align\}',
+            r'\\begin\{eqnarray\}(.*?)\\end\{eqnarray\}',
+            r'\$\$(.*?)\$\$'
+        ]
+        
+        for pattern in eq_patterns:
+            matches = re.finditer(pattern, self.latex_content, re.DOTALL)
+            for match in matches:
+                equations.append({
+                    'content': match.group(1).strip(),
+                    'type': 'display'
                 })
-    
-    return title, authors
-
-def extract_sections(content):
-    """Extract sections and subsections with hierarchy"""
-    sections = []
-    
-    # Find all sections and subsections
-    section_pattern = r'\\(sub)?section\{([^}]+)\}'
-    matches = list(re.finditer(section_pattern, content))
-    
-    for i, match in enumerate(matches):
-        is_subsection = match.group(1) == 'sub'
-        title = match.group(2)
-        start_pos = match.end()
         
-        # Find content until next section
-        if i + 1 < len(matches):
-            end_pos = matches[i + 1].start()
-        else:
-            end_pos = len(content)
+        return equations
+    
+    def _extract_bibliography(self) -> List[Dict[str, str]]:
+        """Extract bibliography entries"""
+        bibliography = []
         
-        section_content = content[start_pos:end_pos].strip()
+        # Extract bibitem entries
+        bibitem_pattern = r'\\bibitem\{([^}]+)\}(.*?)(?=\\bibitem|\\end\{thebibliography\}|$)'
+        matches = re.finditer(bibitem_pattern, self.latex_content, re.DOTALL)
         
-        sections.append({
-            'type': 'subsection' if is_subsection else 'section',
-            'title': title,
-            'content': section_content
-        })
-    
-    return sections
-
-def extract_bibliography(content):
-    """Extract bibliography entries from \bibitem commands"""
-    biblio = []
-    
-    # Find bibliography section
-    bib_start = content.find('\\begin{thebibliography}')
-    if bib_start == -1:
-        return biblio
-    
-    bib_end = content.find('\\end{thebibliography}', bib_start)
-    if bib_end == -1:
-        bib_end = len(content)
-    
-    bib_content = content[bib_start:bib_end]
-    
-    # Extract bibitem entries
-    bibitem_pattern = r'\\bibitem\{([^}]+)\}\s*([^\\]+?)(?=\\bibitem|\s*$)'
-    matches = re.findall(bibitem_pattern, bib_content, re.DOTALL)
-    
-    for key, text in matches:
-        biblio.append({
-            'key': key,
-            'text': text.strip()
-        })
-    
-    return biblio
-
-def extract_citations(content):
-    """Extract all citations from \cite commands"""
-    citations = []
-    cite_pattern = r'\\cite\{([^}]+)\}'
-    matches = re.findall(cite_pattern, content)
-    
-    for match in matches:
-        # Handle multiple citations separated by commas
-        keys = [key.strip() for key in match.split(',')]
-        citations.extend(keys)
-    
-    return list(set(citations))  # Remove duplicates
-
-def extract_tables(content):
-    """Extract tables from \begin{table} environments"""
-    tables = []
-    
-    table_pattern = r'\\begin\{table\}(.*?)\\end\{table\}'
-    matches = re.findall(table_pattern, content, re.DOTALL)
-    
-    for i, match in enumerate(matches):
-        # Extract caption
-        caption_match = re.search(r'\\caption\{([^}]+)\}', match)
-        caption = caption_match.group(1) if caption_match else f"Table {i+1}"
+        for match in matches:
+            ref_id = match.group(1)
+            content = match.group(2).strip()
+            
+            bibliography.append({
+                'id': ref_id,
+                'content': content
+            })
         
-        # Extract label
-        label_match = re.search(r'\\label\{([^}]+)\}', match)
-        label = label_match.group(1) if label_match else f"tab{i+1}"
+        return bibliography
+    
+    def _extract_citations(self) -> List[str]:
+        """Extract citation references"""
+        citations = []
         
-        tables.append({
-            'id': label,
-            'caption': caption,
-            'content': match.strip()
-        })
-    
-    return tables
-
-def extract_figures(content):
-    """Extract figures from \begin{figure} environments"""
-    figures = []
-    
-    figure_pattern = r'\\begin\{figure\}(.*?)\\end\{figure\}'
-    matches = re.findall(figure_pattern, content, re.DOTALL)
-    
-    for i, match in enumerate(matches):
-        # Extract caption
-        caption_match = re.search(r'\\caption\{([^}]+)\}', match)
-        caption = caption_match.group(1) if caption_match else f"Figure {i+1}"
+        # Find all \cite commands
+        cite_pattern = r'\\cite\{([^}]+)\}'
+        matches = re.finditer(cite_pattern, self.latex_content)
         
-        # Extract label
-        label_match = re.search(r'\\label\{([^}]+)\}', match)
-        label = label_match.group(1) if label_match else f"fig{i+1}"
+        for match in matches:
+            cite_keys = match.group(1).split(',')
+            citations.extend([key.strip() for key in cite_keys])
         
-        figures.append({
-            'id': label,
-            'caption': caption,
-            'content': match.strip()
-        })
+        return list(set(citations))  # Remove duplicates
     
-    return figures
-
-def extract_equations(content):
-    """Extract mathematical equations (both inline and display)"""
-    equations = []
-    
-    # Display equations with \begin{equation}
-    eq_pattern = r'\\begin\{equation\}(.*?)\\end\{equation\}'
-    matches = re.findall(eq_pattern, content, re.DOTALL)
-    
-    for i, match in enumerate(matches):
-        # Extract label if present
-        label_match = re.search(r'\\label\{([^}]+)\}', match)
-        label = label_match.group(1) if label_match else f"eq{i+1}"
+    def _extract_tables(self) -> List[Dict[str, Any]]:
+        """Extract table environments"""
+        tables = []
         
-        equations.append({
-            'type': 'display',
-            'id': label,
-            'content': match.strip()
-        })
-    
-    # Inline math with $ ... $
-    inline_pattern = r'\$([^$]+)\$'
-    inline_matches = re.findall(inline_pattern, content)
-    
-    for i, match in enumerate(inline_matches):
-        equations.append({
-            'type': 'inline',
-            'id': f"inline{i+1}",
-            'content': match.strip()
-        })
-    
-    return equations
-
-def create_xml_document(title, authors, sections, bibliography, citations, tables, figures, equations):
-    """Create XML document with all extracted components"""
-    
-    # Create root element with correct schema
-    root = ET.Element('paper')
-    root.set('xmlns', 'http://example.com/academic-paper')
-    root.set('xmlns:xhtml', 'http://www.w3.org/1999/xhtml')
-    root.set('xmlns:mathml', 'http://www.w3.org/1998/Math/MathML')
-    
-    # Metadata
-    metadata = ET.SubElement(root, 'metadata')
-    title_elem = ET.SubElement(metadata, 'title')
-    title_elem.text = title
-    
-    authors_elem = ET.SubElement(metadata, 'authors')
-    for author in authors:
-        author_elem = ET.SubElement(authors_elem, 'author')
-        name_elem = ET.SubElement(author_elem, 'name')
-        name_elem.text = author['name']
-        if author['affiliation']:
-            affil_elem = ET.SubElement(author_elem, 'affiliation')
-            affil_elem.text = author['affiliation']
-        if author['email']:
-            email_elem = ET.SubElement(author_elem, 'email')
-            email_elem.text = author['email']
-    
-    # Content sections
-    content_elem = ET.SubElement(root, 'content')
-    
-    for section in sections:
-        if section['type'] == 'section':
-            sect_elem = ET.SubElement(content_elem, 'section')
-        else:
-            sect_elem = ET.SubElement(content_elem, 'subsection')
+        table_pattern = r'\\begin\{table\}(.*?)\\end\{table\}'
+        matches = re.finditer(table_pattern, self.latex_content, re.DOTALL)
         
-        sect_title = ET.SubElement(sect_elem, 'title')
-        sect_title.text = section['title']
+        for i, match in enumerate(matches):
+            content = match.group(1)
+            
+            # Extract caption if present
+            caption_match = re.search(r'\\caption\{([^}]+)\}', content)
+            caption = caption_match.group(1) if caption_match else f"Table {i+1}"
+            
+            tables.append({
+                'id': f"table_{i+1}",
+                'caption': caption,
+                'content': content.strip()
+            })
         
-        sect_content = ET.SubElement(sect_elem, 'text')
-        sect_content.text = section['content']
+        return tables
     
-    # Tables
-    if tables:
-        tables_elem = ET.SubElement(root, 'tables')
-        for table in tables:
-            table_elem = ET.SubElement(tables_elem, 'table')
+    def _extract_figures(self) -> List[Dict[str, Any]]:
+        """Extract figure environments"""
+        figures = []
+        
+        figure_pattern = r'\\begin\{figure\}(.*?)\\end\{figure\}'
+        matches = re.finditer(figure_pattern, self.latex_content, re.DOTALL)
+        
+        for i, match in enumerate(matches):
+            content = match.group(1)
+            
+            # Extract caption and includegraphics
+            caption_match = re.search(r'\\caption\{([^}]+)\}', content)
+            caption = caption_match.group(1) if caption_match else f"Figure {i+1}"
+            
+            graphics_match = re.search(r'\\includegraphics(?:\[[^\]]*\])?\{([^}]+)\}', content)
+            source = graphics_match.group(1) if graphics_match else ""
+            
+            figures.append({
+                'id': f"figure_{i+1}",
+                'caption': caption,
+                'source': source,
+                'content': content.strip()
+            })
+        
+        return figures
+    
+    # Private XML generation methods
+    def _add_metadata_to_xml(self, root: ET.Element, metadata: Dict[str, Any]) -> None:
+        """Add metadata section to XML"""
+        metadata_elem = ET.SubElement(root, 'metadata')
+        
+        # Title
+        title_elem = ET.SubElement(metadata_elem, 'title')
+        title_elem.text = metadata['title']
+        
+        # Authors
+        authors_elem = ET.SubElement(metadata_elem, 'authors')
+        for author in metadata['authors']:
+            author_elem = ET.SubElement(authors_elem, 'author')
+            
+            name_elem = ET.SubElement(author_elem, 'name')
+            name_elem.text = author['name']
+            
+            if author['affiliation']:
+                affil_elem = ET.SubElement(author_elem, 'affiliation')
+                affil_elem.text = author['affiliation']
+            
+            if author['email']:
+                email_elem = ET.SubElement(author_elem, 'email')
+                email_elem.text = author['email']
+        
+        # Abstract
+        if metadata['abstract']:
+            abstract_elem = ET.SubElement(metadata_elem, 'abstract')
+            p_elem = ET.SubElement(abstract_elem, 'p')
+            p_elem.set('xmlns', 'http://www.w3.org/1999/xhtml')
+            p_elem.text = metadata['abstract']
+    
+    def _add_sections_to_xml(self, root: ET.Element, sections: List[Dict[str, Any]]) -> None:
+        """Add sections to XML"""
+        sections_elem = ET.SubElement(root, 'sections')
+        
+        for i, section in enumerate(sections):
+            section_elem = ET.SubElement(sections_elem, 'section')
+            section_elem.set('id', f"section_{i+1}")
+            section_elem.set('level', section['level'])
+            
+            title_elem = ET.SubElement(section_elem, 'title')
+            title_elem.text = section['title']
+            
+            content_elem = ET.SubElement(section_elem, 'content')
+            p_elem = ET.SubElement(content_elem, 'p')
+            p_elem.set('xmlns', 'http://www.w3.org/1999/xhtml')
+            p_elem.text = section['content']
+    
+    def _add_references_to_xml(self, root: ET.Element, references: Dict[str, Any]) -> None:
+        """Add references section to XML"""
+        if references['bibliography']:
+            refs_elem = ET.SubElement(root, 'references')
+            
+            for ref in references['bibliography']:
+                ref_elem = ET.SubElement(refs_elem, 'reference')
+                ref_elem.set('id', ref['id'])
+                
+                content_elem = ET.SubElement(ref_elem, 'content')
+                content_elem.text = ref['content']
+    
+    def _add_tables_figures_to_xml(self, root: ET.Element, tables_figures: Dict[str, Any]) -> None:
+        """Add tables and figures to XML"""
+        # Add tables
+        for table in tables_figures['tables']:
+            table_elem = ET.SubElement(root, 'table')
             table_elem.set('id', table['id'])
             
             caption_elem = ET.SubElement(table_elem, 'caption')
@@ -246,106 +418,87 @@ def create_xml_document(title, authors, sections, bibliography, citations, table
             
             content_elem = ET.SubElement(table_elem, 'content')
             content_elem.text = table['content']
-    
-    # Figures
-    if figures:
-        figures_elem = ET.SubElement(root, 'figures')
-        for figure in figures:
-            fig_elem = ET.SubElement(figures_elem, 'figure')
-            fig_elem.set('id', figure['id'])
+        
+        # Add figures
+        for figure in tables_figures['figures']:
+            figure_elem = ET.SubElement(root, 'figure')
+            figure_elem.set('id', figure['id'])
             
-            caption_elem = ET.SubElement(fig_elem, 'caption')
+            caption_elem = ET.SubElement(figure_elem, 'caption')
             caption_elem.text = figure['caption']
             
-            content_elem = ET.SubElement(fig_elem, 'content')
-            content_elem.text = figure['content']
+            if figure['source']:
+                source_elem = ET.SubElement(figure_elem, 'source_reference')
+                source_elem.text = figure['source']
     
-    # Equations
-    if equations:
-        equations_elem = ET.SubElement(root, 'equations')
-        for equation in equations:
-            eq_elem = ET.SubElement(equations_elem, 'equation')
+    def _add_equations_to_xml(self, root: ET.Element, equations: List[Dict[str, str]]) -> None:
+        """Add equations to XML"""
+        for i, equation in enumerate(equations):
+            eq_elem = ET.SubElement(root, 'equation')
+            eq_elem.set('id', f"eq_{i+1}")
             eq_elem.set('type', equation['type'])
-            eq_elem.set('id', equation['id'])
             eq_elem.text = equation['content']
     
-    # Citations
-    if citations:
-        citations_elem = ET.SubElement(root, 'citations')
-        for citation in citations:
-            cite_elem = ET.SubElement(citations_elem, 'citation')
-            cite_elem.text = citation
-    
-    # Bibliography
-    if bibliography:
-        biblio_elem = ET.SubElement(root, 'bibliography')
-        for bib_entry in bibliography:
-            entry_elem = ET.SubElement(biblio_elem, 'entry')
-            entry_elem.set('key', bib_entry['key'])
-            entry_elem.text = bib_entry['text']
-    
-    return root
+    def _prettify_xml(self, root: ET.Element) -> str:
+        """Format XML with proper indentation"""
+        rough_string = ET.tostring(root, encoding='unicode')
+        reparsed = minidom.parseString(rough_string)
+        return reparsed.toprettyxml(indent="  ")
 
-def convert_latex_to_xml(latex_file, output_file):
-    """Main conversion function"""
-    
-    # Read LaTeX file
-    with open(latex_file, 'r', encoding='utf-8') as f:
-        content = f.read()
-    
-    print("Extracting components...")
-    
-    # Extract all components
-    title, authors = extract_title_authors(content)
-    sections = extract_sections(content)
-    bibliography = extract_bibliography(content)
-    citations = extract_citations(content)
-    tables = extract_tables(content)
-    figures = extract_figures(content)
-    equations = extract_equations(content)
-    
-    print(f"Found: {len(sections)} sections, {len(bibliography)} bibliography entries")
-    print(f"Found: {len(citations)} unique citations, {len(tables)} tables")
-    print(f"Found: {len(figures)} figures, {len(equations)} equations")
-    
-    # Create XML document
-    root = create_xml_document(title, authors, sections, bibliography, citations, tables, figures, equations)
-    
-    # Pretty print XML
-    rough_string = ET.tostring(root, 'unicode')
-    reparsed = minidom.parseString(rough_string)
-    pretty_xml = reparsed.toprettyxml(indent="  ")
-    
-    # Write to file
-    with open(output_file, 'w', encoding='utf-8') as f:
-        f.write(pretty_xml)
-    
-    print(f"XML conversion complete: {output_file}")
-    
-    # Validation summary
-    print("\nValidation Summary:")
-    print(f"✓ Title: {title}")
-    print(f"✓ Authors: {len(authors)}")
-    print(f"✓ Sections: {len(sections)}")
-    print(f"✓ Bibliography entries: {len(bibliography)}")
-    print(f"✓ Citations: {len(citations)}")
-    print(f"✓ Tables: {len(tables)}")
-    print(f"✓ Figures: {len(figures)}")
-    print(f"✓ Equations: {len(equations)}")
 
-if __name__ == "__main__":
-    import sys
+def main():
+    """Command-line interface"""
     if len(sys.argv) < 2:
         print("Usage: python3 latex_to_xml_rules_based.py <latex_file> [output_file]")
         sys.exit(1)
     
     latex_file = sys.argv[1]
+    
+    # Determine output file
     if len(sys.argv) > 2:
         output_file = sys.argv[2]
     else:
-        # Default output to output directory
-        from pathlib import Path
         latex_path = Path(latex_file)
         output_file = f"output/{latex_path.stem}_rules_based.xml"
     
-    convert_latex_to_xml(latex_file, output_file)
+    try:
+        # Initialize converter
+        converter = RulesBasedConverter()
+        converter.load_latex(latex_file)
+        
+        # Convert to JSON representation (internal processing)
+        json_data = converter.convert_to_json()
+        
+        # Convert to XML and save
+        xml_content = converter.convert_to_xml(json_data)
+        with open(output_file, 'w', encoding='utf-8') as f:
+            f.write(xml_content)
+        print(f"XML conversion complete: {output_file}")
+        
+        # Display extraction summary
+        summary = converter.get_extraction_summary()
+        print("\nExtraction Summary:")
+        for key, value in summary.items():
+            print(f"✓ {key.replace('total_', '').title()}: {value}")
+        
+        # Import and use structural reviewer for quality assessment
+        try:
+            from structural_review.review_structure import StructuralReviewer
+            
+            reviewer = StructuralReviewer(latex_file, output_file)
+            json_output = reviewer.output_json()
+            analysis = json.loads(json_output)
+            
+            score = analysis.get('overall_score', 0)
+            quality_level = analysis.get('summary', {}).get('quality_level', 'UNKNOWN')
+            print(f"\n📊 Quality Score: {score}% ({quality_level})")
+        except Exception as e:
+            print(f"\n⚠️  Quality assessment unavailable: {e}")
+    
+    except Exception as e:
+        print(f"❌ Conversion failed: {e}")
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
