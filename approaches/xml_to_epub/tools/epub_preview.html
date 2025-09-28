@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Word2Vec Paper Preview</title>
+    <style>
+/* Academic ePub Styles with Math Support */
+
+body {
+    font-family: "Times New Roman", serif;
+    font-size: 1em;
+    line-height: 1.6;
+    margin: 1em;
+    color: #333;
+}
+
+/* Math styling */
+.math {
+    font-family: "Times New Roman", serif;
+    font-size: 1em;
+}
+
+.math-display {
+    display: block;
+    text-align: center;
+    margin: 1em 0;
+}
+
+/* Title Page */
+.title-page {
+    text-align: center;
+    margin: 2em 0 3em 0;
+    page-break-after: always;
+}
+
+.title {
+    font-size: 1.8em;
+    font-weight: bold;
+    color: #2c3e50;
+    margin: 1em 0;
+    line-height: 1.3;
+}
+
+.authors {
+    margin: 2em 0;
+}
+
+.author-names {
+    font-size: 1.2em;
+    font-weight: bold;
+    margin: 1em 0;
+}
+
+.affiliation {
+    font-size: 0.9em;
+    color: #666;
+    margin: 0.5em 0;
+}
+
+/* Table of Contents */
+.toc {
+    background: #f8f9fa;
+    padding: 1.5em;
+    margin: 2em 0;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    page-break-after: always;
+}
+
+.toc h2 {
+    margin-top: 0;
+    color: #2c3e50;
+    border-bottom: 2px solid #3498db;
+    padding-bottom: 0.5em;
+}
+
+.toc ul {
+    list-style-type: none;
+    padding-left: 0;
+}
+
+.toc li {
+    margin: 0.5em 0;
+    padding-left: 1em;
+}
+
+.toc li.subsection {
+    padding-left: 2em;
+    font-size: 0.9em;
+}
+
+/* Abstract */
+.abstract {
+    background: #f8f9fa;
+    padding: 1.5em;
+    border-left: 4px solid #3498db;
+    margin: 2em 0;
+}
+
+/* Sections */
+.section {
+    margin: 2em 0;
+}
+
+.section-title {
+    color: #2c3e50;
+    border-bottom: 2px solid #3498db;
+    padding-bottom: 0.5em;
+    margin: 2em 0 1em 0;
+}
+
+.subsection-title {
+    color: #34495e;
+    border-bottom: 1px solid #bdc3c7;
+    padding-bottom: 0.3em;
+    margin: 1.5em 0 0.5em 0;
+}
+
+/* Equations */
+.equations {
+    margin: 3em 0;
+    border-top: 2px solid #3498db;
+    padding-top: 2em;
+}
+
+.equation {
+    margin: 2em 0;
+    text-align: center;
+}
+
+.equation-content {
+    font-size: 1.1em;
+    margin: 1em 0;
+}
+
+.equation-description {
+    font-size: 0.9em;
+    color: #666;
+    font-style: italic;
+}
+
+/* References */
+.references {
+    margin: 3em 0 0 0;
+    border-top: 2px solid #3498db;
+    padding-top: 2em;
+}
+
+.reference-list {
+    padding-left: 2em;
+}
+
+.reference-item {
+    margin: 1em 0;
+    text-align: justify;
+    line-height: 1.5;
+}
+
+.ref-authors {
+    font-weight: bold;
+}
+
+.ref-title {
+    font-style: italic;
+}
+
+.ref-venue {
+    color: #666;
+}
+
+.ref-year {
+    font-weight: bold;
+}
+    </style>
+</head>
+<body>
+
+    <div class="toc">
+      <h2>Table of Contents</h2>
+      <ul>
+        <li>
+          <a href="#section1">Introduction</a>
+        </li>
+        <li>
+          <a href="#section2">Model Architectures</a>
+        </li>
+        <li class="subsection">
+          <a href="#section2_sub1">Feedforward Neural Net Language Model (NNLM)</a>
+        </li>
+        <li class="subsection">
+          <a href="#section2_sub2">Recurrent Neural Net Language Model (RNNLM)</a>
+        </li>
+        <li>
+          <a href="#section3">New Log-linear Models</a>
+        </li>
+        <li class="subsection">
+          <a href="#section3_sub1">Continuous Bag-of-Words Model</a>
+        </li>
+        <li class="subsection">
+          <a href="#section3_sub2">Continuous Skip-gram Model</a>
+        </li>
+        <li>
+          <a href="#section4">Results</a>
+        </li>
+      </ul>
+    </div>
+    <div class="title-page">
+      <h1 class="title">Efficient Estimation of Word Representations in Vector Space</h1>
+      <div class="authors">
+        <p class="author-names">Tomas Mikolov, Kai Chen, Greg Corrado, Jeffrey Dean</p>
+        <p class="affiliation">Google Inc., Mountain View, CA (tmikolov@google.com)</p>
+        <p class="affiliation">Google Inc., Mountain View, CA (kaichen@google.com)</p>
+        <p class="affiliation">Google Inc., Mountain View, CA (gcorrado@google.com)</p>
+        <p class="affiliation">Google Inc., Mountain View, CA (jeff@google.com)</p>
+      </div>
+      <div class="publication-info">
+        <p class="venue">arXiv preprint</p>
+        <p class="date">2013-01-16</p>
+        <p class="arxiv">arXiv:1301.3781</p>
+      </div>
+    </div>
+    <div class="abstract"><h2>Abstract</h2>
+      <p>We propose two novel model architectures for computing continuous vector representations of words from very large data sets. The quality of these representations is measured in a word similarity task, and the results are compared to the previously best performing techniques based on different types of neural networks. We observe large improvements in accuracy at much lower computational cost, i.e. it takes less than a day to learn high quality word vectors from a 1.6 billion words data set. Furthermore, we show that these vectors provide state-of-the-art performance on our test set for measuring syntactic and semantic word similarities.</p>
+    </div>
+    <div class="section" id="section1">
+      <h1 class="section-title">Introduction</h1>
+      <div class="section-content">
+        <p>Many current NLP systems and techniques treat words as atomic units - there is no notion of similarity between words, as these are represented as indices in a vocabulary. This choice has several good reasons - simplicity, robustness and the observation that simple models trained on huge amounts of data outperform complex systems trained on less data. An example is the popular N-gram model used for statistical language modeling - today, it is possible to train N-grams on virtually all available data (trillions of words stupid-backoff).</p>
+        
+        <p>However, the simple techniques are at their limits in many tasks. For example, the amount of relevant in-domain data for automatic speech recognition is limited - the performance is usually dominated by the size of high quality transcribed speech data (often just millions of words). In machine translation, the existing corpora for many languages contain only a few billions of words or less. Thus, there are situations where simple scaling up of the basic techniques will not result in any significant progress, and we have to focus on more advanced techniques.</p>
+        
+        <p>With progress of machine learning techniques in recent years, it has become possible to train more complex models on much larger data set, and they typically outperform the simple models. Probably the most successful concept is to use distributed representations of words Hinton. For example, neural network based language models significantly outperform N-gram models Bengio Schwenk MikolovIS2011.</p>
+        
+        <p>The main goal of this paper is to introduce techniques that can be used for learning high-quality word vectors from huge data sets with billions of words, and with millions of words in the vocabulary. As far as we know, none of the previously proposed architectures has been successfully trained on more than a few hundred of millions of words, with a modest dimensionality of the word vectors between 50 - 100. We use recently proposed techniques for measuring the quality of the resulting vector representations, with the expectation that not only will similar words tend to be close to each other, but that words can have multiple degrees of similarity NAACL1.</p>
+        
+        <p>This has been observed earlier in the context of inflectional languages - for example, nouns can have multiple word endings, and if we search for similar words in a subspace of the original vector space, it is possible to find words that have similar endings dip Mikolov. Somewhat surprisingly, it was found that similarity of word representations goes beyond simple syntactic regularities. Using a word offset technique where simple algebraic operations are performed on the word vectors, it was shown for example that <em>vector("King") - vector("Man") + vector("Woman")</em> results in a vector that is closest to the vector representation of the word <em>Queen</em> NAACL1.</p>
+        
+        <p>In this paper, we try to maximize accuracy of these vector operations by developing new model architectures that preserve the linear regularities among words. We design a new comprehensive test set for measuring both syntactic and semantic regularities, and show that many such regularities can be learned with high accuracy. Moreover, we discuss how training time and accuracy depends on the dimensionality of the word vectors and on the amount of the training data.</p>
+      </div>
+    </div>
+    <div class="section" id="section2">
+      <h1 class="section-title">Model Architectures</h1>
+      <div class="section-content">
+        <p>Many different types of models were proposed for estimating continuous representations of words, including the well-known Latent Semantic Analysis (LSA) and Latent Dirichlet Allocation (LDA). In this paper, we focus on distributed representations of words learned by neural networks, as it was previously shown that they perform significantly better than LSA for preserving linear regularities among words NAACL1 Mikolov; LDA moreover becomes computationally very expensive on large data sets.</p>
+      </div>
+      <div class="subsection" id="section2_sub1">
+        <h2 class="subsection-title">Feedforward Neural Net Language Model (NNLM)</h2>
+        <div class="subsection-content">
+            <p>The probabilistic feedforward neural network language model has been proposed in Bengio. It consists of input, projection, hidden and output layers. At the input layer, N previous words are encoded using 1-of-V coding, where V is size of the vocabulary. The input layer is then projected to a projection layer P that has dimensionality N × D, using a shared projection matrix. As only N inputs are active at any given time, composition of the projection layer is a relatively cheap operation.</p>
+            
+            <p>The NNLM architecture becomes complex for computation between the projection and the hidden layer, as values in the projection layer are dense. For a common choice of N = 10, the size of the projection layer (P) might be 500 to 2000, while the hidden layer size H is typically 500 to 1000 units. Moreover, the hidden layer is used to compute probability distribution over all the words in the vocabulary, resulting in an output layer with dimensionality V = 30,000 to 1,500,000 (depending on the task). The computational complexity per each training example is:</p>
+            
+            
+              <span class="math">
+                
+                  <em>Q</em>
+                  =
+                  <em>N</em>
+                  ×
+                  <em>D</em>
+                  +
+                  <em>N</em>
+                  ×
+                  <em>D</em>
+                  ×
+                  <em>H</em>
+                  +
+                  <em>H</em>
+                  ×
+                  <em>V</em>
+                
+              </span>
+            
+            
+            <p>where the dominating term is H × V. However, several practical solutions were proposed for avoiding it; either using hierarchical versions of the softmax Morin, or avoiding normalized models completely by using models that are not normalized during training Collobert1.</p>
+          </div>
+      </div>
+      <div class="subsection" id="section2_sub2">
+        <h2 class="subsection-title">Recurrent Neural Net Language Model (RNNLM)</h2>
+        <div class="subsection-content">
+            <p>Recurrent neural network based language model has been proposed to overcome certain limitations of the feedforward NNLM, such as the need to specify the context length (the order of the model N), and because theoretically RNNs can efficiently represent more complex patterns than the shallow neural networks dip. The RNN model does not have a projection layer; only input, hidden and output layers. What is special for this type of model is that the hidden layer (state) s(t-1) is required to be computed iteratively: s(t) = f(Uw(t) + Ws(t-1)), where f(z) is sigmoid function, and U, W are weight matrices.</p>
+            
+            <p>The complexity per training example of the RNN model is:</p>
+            
+            
+              <span class="math">
+                
+                  <em>Q</em>
+                  =
+                  <em>H</em>
+                  ×
+                  <em>H</em>
+                  +
+                  <em>H</em>
+                  ×
+                  <em>V</em>
+                
+              </span>
+            
+            
+            <p>where the word representations D have the same dimensionality as the hidden layer H. Again, the term H × V can be efficiently reduced to H × log₂(V) by using hierarchical softmax. Most of the complexity then comes from H × H.</p>
+          </div>
+      </div>
+    </div>
+    <div class="section" id="section3">
+      <h1 class="section-title">New Log-linear Models</h1>
+      <div class="section-content">
+        <p>In this section, we propose two new model architectures for learning distributed representations of words that try to minimize computational complexity. The main observation from the previous section was that most of the complexity is caused by the non-linear hidden layer in the model. While this is what makes neural networks so attractive, we decided to explore simpler models that might not be able to represent the data as precisely as neural networks, but can possibly be trained on much more data efficiently.</p>
+      </div>
+      <div class="subsection" id="section3_sub1">
+        <h2 class="subsection-title">Continuous Bag-of-Words Model</h2>
+        <div class="subsection-content">
+            <p>The first proposed architecture is similar to the feedforward NNLM, where the non-linear hidden layer is removed and the projection layer is shared for all words (not just the projection matrix); thus, all words get projected into the same position (their vectors are averaged). We call this architecture a bag-of-words model as the order of words in the history does not influence projection. Furthermore, we also use words from the future; we have found that this improves accuracy of the resulting word vectors significantly, and the training time is much shorter compared to the standard feedforward NNLM.</p>
+            
+            <p>The training complexity is then:</p>
+            
+            
+              <span class="math">
+                
+                  <em>Q</em>
+                  =
+                  <em>N</em>
+                  ×
+                  <em>D</em>
+                  +
+                  <em>D</em>
+                  ×
+                  <em>log₂</em>
+                  (
+                  <em>V</em>
+                  )
+                
+              </span>
+            
+            
+            <p>We denote this model further as CBOW, as unlike standard bag-of-words model, it uses continuous distributed representation of the context. The model architecture is shown at Fig. 1. Note that the input and the output word must be different, because the model would predict the word itself.</p>
+          </div>
+      </div>
+      <div class="subsection" id="section3_sub2">
+        <h2 class="subsection-title">Continuous Skip-gram Model</h2>
+        <div class="subsection-content">
+            <p>The second architecture is similar to CBOW, but instead of predicting the current word based on the context, it tries to maximize classification of a word based on another word in the same sentence. More precisely, we use each current word as an input to a log-linear classifier with continuous projection layer, and predict words within a certain range before and after the current word. We found that increasing the range improves quality of the resulting word vectors, but it also increases the computational complexity.</p>
+            
+            <p>Since the more distant words are usually less related to the current word than those close to it, we give less weight to the distant words by sampling less from those words in our training examples. The training complexity of this architecture is proportional to:</p>
+            
+            
+              <span class="math">
+                
+                  <em>Q</em>
+                  =
+                  <em>C</em>
+                  ×
+                  (
+                  <em>D</em>
+                  +
+                  <em>D</em>
+                  ×
+                  <em>log₂</em>
+                  (
+                  <em>V</em>
+                  )
+                  )
+                
+              </span>
+            
+            
+            <p>where C is the maximum distance of the words. However, in practice C is usually much smaller than V. The basic Skip-gram formulation defines p(w_{O}|w_{I}) using the softmax function.</p>
+          </div>
+      </div>
+    </div>
+    <div class="section" id="section4">
+      <h1 class="section-title">Results</h1>
+      <div class="section-content">
+        <p>To compare the quality of different versions of word vectors, previous papers typically use a table showing example words and their most similar words, and understand them intuitively. Although it is easy to show that word France is similar to Italy and perhaps some other countries, it is much more challenging when subjecting those vectors in a more complex similarity task, as follows. We follow previous observation that there can be many different types of similarities between words, for example, word big is similar to bigger in the same sense that small is similar to smaller. Example of another type of relationship can be word pairs big - biggest and small - smallest NAACL1. We further denote two pairs of words with the same relationship as a question, as we can ask: "What is the word that is similar to small in the same sense as biggest is similar to big?"</p>
+        
+        <p>Somewhat surprisingly, these questions can be answered by performing simple algebraic operations with the vector representations of words. To find a word that is similar to small in the same sense as biggest is similar to big, we can simply compute vector X = vector("biggest") - vector("big") + vector("small"). Then, we search in the vector space for the word closest to X measured by cosine distance, and use it as the answer to the question (we discard the input question words during this search).</p>
+      </div>
+    </div>
+    <div class="tables">
+      <h2>Tables</h2>
+      <div class="table" id="table1">
+        <table>
+          <caption>Accuracy on word analogy test set. The CBOW architecture achieves the best performance on syntactic questions, and the Skip-gram architecture achieves the best performance on semantic questions.</caption>
+          <thead>
+            <tr>
+              <th>Model</th>
+              <th>Syntactic [%]</th>
+              <th>Semantic [%]</th>
+              <th>Total [%]</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>CBOW</td>
+              <td>68.4</td>
+              <td>24.0</td>
+              <td>53.1</td>
+            </tr>
+            <tr>
+              <td>Skip-gram</td>
+              <td>27.4</td>
+              <td>55.9</td>
+              <td>38.4</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="table" id="table2">
+        <table>
+          <caption>Comparison of architectures based on the training time and accuracy on the word analogy test set.</caption>
+          <thead>
+            <tr>
+              <th>Architecture</th>
+              <th>Training time [days]</th>
+              <th>Accuracy [%]</th>
+              <th>Words trained [billions]</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>CBOW</td>
+              <td>1</td>
+              <td>53.1</td>
+              <td>1.6</td>
+            </tr>
+            <tr>
+              <td>Skip-gram</td>
+              <td>3</td>
+              <td>38.4</td>
+              <td>1.6</td>
+            </tr>
+            <tr>
+              <td>NNLM</td>
+              <td>14</td>
+              <td>23.2</td>
+              <td>0.14</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="figures">
+      <h2>Figures</h2>
+      <div class="figure" id="fig1">
+        <figure>
+          <img src="efficient-models.png.png" alt="" class="figure-image"/>
+          <figcaption>The CBOW architecture predicts the current word based on the context, and the Skip-gram predicts surrounding words given the current word.</figcaption>
+        </figure>
+      </div>
+    </div>
+    <div class="equations">
+      <h2>Equations</h2>
+      <div class="equation" id="eq1">
+        <div class="equation-content">
+        <span class="math">
+          
+            <em>Q</em>
+            =
+            <em>N</em>
+            ×
+            <em>D</em>
+            +
+            <em>N</em>
+            ×
+            <em>D</em>
+            ×
+            <em>H</em>
+            +
+            <em>H</em>
+            ×
+            <em>V</em>
+          
+        </span>
+      </div>
+        <div class="equation-description">Computational complexity of NNLM</div>
+      </div>
+      <div class="equation" id="eq2">
+        <div class="equation-content">
+        <span class="math">
+          
+            <em>Q</em>
+            =
+            <em>H</em>
+            ×
+            <em>H</em>
+            +
+            <em>H</em>
+            ×
+            <em>V</em>
+          
+        </span>
+      </div>
+        <div class="equation-description">Computational complexity of RNN</div>
+      </div>
+    </div>
+    <div class="references">
+      <h2 id="references">References</h2>
+      <ol class="reference-list">
+        <li id="Bengio" class="reference-item"><span class="ref-authors">Y. Bengio, R. Ducharme, P. Vincent</span>. 
+      <span class="ref-title">"A neural probabilistic language model"</span>. 
+      <span class="ref-venue">Journal of Machine Learning Research</span>, 
+      <span class="ref-year">2003</span>.
+      </li>
+        <li id="Hinton" class="reference-item"><span class="ref-authors">G.E. Hinton, J.L. McClelland, D.E. Rumelhart</span>. 
+      <span class="ref-title">"Distributed representations"</span>. 
+      <span class="ref-venue">Parallel distributed processing: Explorations in the microstructure of cognition. Volume 1: Foundations</span>, 
+      <span class="ref-year">1986</span>.
+      </li>
+        <li id="NAACL1" class="reference-item"><span class="ref-authors">T. Mikolov, W.T. Yih, G. Zweig</span>. 
+      <span class="ref-title">"Linguistic Regularities in Continuous Space Word Representations"</span>. 
+      <span class="ref-venue">Proceedings of NAACL-HLT</span>, 
+      <span class="ref-year">2013</span>.
+      </li>
+        <li id="MikolovIS2011" class="reference-item"><span class="ref-authors">T. Mikolov, S. Kombrink, L. Burget, J. Cernocky, S. Khudanpur</span>. 
+      <span class="ref-title">"Extensions of recurrent neural network language model"</span>. 
+      <span class="ref-venue">IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP)</span>, 
+      <span class="ref-year">2011</span>.
+      </li>
+        <li id="Schwenk" class="reference-item"><span class="ref-authors">H. Schwenk</span>. 
+      <span class="ref-title">"Continuous space language models"</span>. 
+      <span class="ref-venue">Computer Speech and Language</span>, 
+      <span class="ref-year">2007</span>.
+      </li>
+        <li id="dip" class="reference-item"><span class="ref-authors">T. Mikolov, M. Karafiat, L. Burget, J. Cernocky, S. Khudanpur</span>. 
+      <span class="ref-title">"Recurrent neural network based language model"</span>. 
+      <span class="ref-venue">Proceedings of Interspeech</span>, 
+      <span class="ref-year">2010</span>.
+      </li>
+        <li id="Mikolov" class="reference-item"><span class="ref-authors">T. Mikolov, A. Deoras, D. Povey, L. Burget, J. Cernocky</span>. 
+      <span class="ref-title">"Strategies for training large scale neural network language models"</span>. 
+      <span class="ref-venue">IEEE Workshop on Automatic Speech Recognition and Understanding</span>, 
+      <span class="ref-year">2011</span>.
+      </li>
+        <li id="Collobert1" class="reference-item"><span class="ref-authors">R. Collobert, J. Weston</span>. 
+      <span class="ref-title">"A Unified Architecture for Natural Language Processing: Deep Neural Networks with Multitask Learning"</span>. 
+      <span class="ref-venue">International Conference on Machine Learning, ICML</span>, 
+      <span class="ref-year">2008</span>.
+      </li>
+        <li id="Morin" class="reference-item"><span class="ref-authors">F. Morin, Y. Bengio</span>. 
+      <span class="ref-title">"Hierarchical Probabilistic Neural Network Language Model"</span>. 
+      <span class="ref-venue">AISTATS</span>, 
+      <span class="ref-year">2005</span>.
+      </li>
+      </ol>
+    </div>
+  
+</body>
+</html>
