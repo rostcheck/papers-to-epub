@@ -185,6 +185,50 @@ Return ONLY the JSON array. Make sure to extract ALL authors mentioned."""
         
         return equations
     
+    def extract_citations(self) -> List[Dict[str, str]]:
+        """Extract citation commands using pylatexenc LatexWalker"""
+        from pylatexenc.latexwalker import LatexWalker, LatexMacroNode
+        
+        citations = []
+        citation_count = 0
+        
+        def traverse_nodes(nodes):
+            nonlocal citation_count
+            for node in nodes:
+                if isinstance(node, LatexMacroNode) and node.macroname == 'cite':
+                    citation_count += 1
+                    
+                    # Extract citation keys from arguments
+                    keys = []
+                    if node.nodeargs:
+                        for arg in node.nodeargs:
+                            if hasattr(arg, 'nodelist'):
+                                key_text = ''.join(n.chars for n in arg.nodelist if hasattr(n, 'chars'))
+                                keys.extend([k.strip() for k in key_text.split(',')])
+                    
+                    citations.append({
+                        'id': f"cite_{citation_count}",
+                        'keys': keys,
+                        'full_match': node.latex_verbatim()
+                    })
+                
+                # Recursively traverse child nodes
+                if hasattr(node, 'nodelist') and node.nodelist:
+                    traverse_nodes(node.nodelist)
+                if hasattr(node, 'nodeargs') and node.nodeargs:
+                    for arg in node.nodeargs:
+                        if hasattr(arg, 'nodelist'):
+                            traverse_nodes(arg.nodelist)
+        
+        try:
+            walker = LatexWalker(self.latex_content)
+            nodes, pos, len_ = walker.get_latex_nodes()
+            traverse_nodes(nodes)
+        except Exception as e:
+            print(f"   ⚠️ Citation extraction failed: {e}")
+        
+        return citations
+    
     def extract_structured_elements(self) -> Dict[str, List]:
         """Extract tables, figures, inline math, and citations"""
         return {
@@ -251,7 +295,7 @@ class ContentCleaner:
                 cleaned[key] = value
         return cleaned
     
-    def clean_sections_with_inline_equations(self, sections: List[Dict[str, str]], equations: List[Dict[str, str]]) -> List[Dict[str, str]]:
+    def clean_sections_with_inline_equations(self, sections: List[Dict[str, str]], equations: List[Dict[str, str]], citations: List[Dict[str, str]], references: List[Dict[str, str]]) -> List[Dict[str, str]]:
         """Clean LaTeX commands from sections and embed MathML equations inline"""
         cleaned = []
         for section in sections:
@@ -269,10 +313,31 @@ class ContentCleaner:
                         equation_map[placeholder] = eq
                         content = content.replace(eq['full_match'], placeholder)
                 
+                # Second: Replace citations with placeholders
+                citation_map = {}
+                for i, cite in enumerate(citations):
+                    if cite['full_match'] in content:
+                        placeholder = f"__CITE_PLACEHOLDER_{i}__"
+                        citation_map[placeholder] = cite
+                        content = content.replace(cite['full_match'], placeholder)
+                
                 # Second: Clean all LaTeX commands (placeholders are safe)
                 content = self.cleaner.latex_to_text(content)
                 
-                # Third: Convert equation LaTeX to MathML and replace placeholders
+                # Third: Replace citation placeholders with author names
+                for placeholder, cite in citation_map.items():
+                    author_names = []
+                    for key in cite['keys']:
+                        # Find reference by key and get first author
+                        ref = next((r for r in references if r.get('id') == key), None)
+                        if ref and ref.get('authors'):
+                            author_names.append(ref['authors'][0])
+                        else:
+                            author_names.append(key)  # Fallback to key
+                    citation_text = f"[{', '.join(author_names)}]"
+                    content = content.replace(placeholder, citation_text)
+                
+                # Fourth: Convert equation LaTeX to MathML and replace placeholders
                 for placeholder, eq in equation_map.items():
                     if eq.get('latex'):
                         try:
@@ -523,19 +588,19 @@ class HybridLatexToXmlConverter:
         sections = self.extractor.extract_sections()
         bibliography_block = self.extractor.extract_bibliography_block()
         equations = self.extractor.extract_equations()
+        citations = self.extractor.extract_citations()
         elements = self.extractor.extract_structured_elements()
+        
+        # Process bibliography (structural data extraction)
+        references = self.processor.process_bibliography(bibliography_block)
         
         # Phase 2: Content cleaning with inline equations
         print("🧹 Phase 2: Cleaning content + inline equations (pylatexenc)...")
         clean_metadata = self.cleaner.clean_metadata(metadata)
-        clean_sections = self.cleaner.clean_sections_with_inline_equations(sections, equations)
+        clean_sections = self.cleaner.clean_sections_with_inline_equations(sections, equations, citations, references)
         
-        # Phase 3: Unstructured processing
-        print("🤖 Phase 3: Processing bibliography (LLM)...")
-        references = self.processor.process_bibliography(bibliography_block)
-        
-        # Phase 4: XML assembly
-        print("📄 Phase 4: Assembling XML with inline MathML...")
+        # Phase 3: XML assembly
+        print("📄 Phase 3: Assembling XML with inline MathML...")
         xml_content = self.assembler.assemble(clean_metadata, clean_sections, references, equations, elements)
         
         # Phase 5: Quality assessment

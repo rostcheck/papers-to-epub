@@ -551,18 +551,28 @@ class StructuralReviewer:
         return [eq.text for eq in equations if eq.text]
     
     def _extract_xml_citations(self) -> List[str]:
-        # Look for citation elements in the academic paper namespace
-        citations = self.xml_root.findall('.//ap:citation', self.ns)
-        if citations:
-            return [cite.text for cite in citations if cite.text]
+        # Look for rendered citations in [Author Name] format in content
+        import re
         
-        # Look for citation elements in XHTML namespace (they inherit from parent <p>)
-        xhtml_ns = {'xhtml': 'http://www.w3.org/1999/xhtml'}
-        citations_xhtml = self.xml_root.findall('.//xhtml:citation', xhtml_ns)
-        if citations_xhtml:
-            return [cite.text for cite in citations_xhtml if cite.text]
+        # Get all text content from sections
+        all_text = ""
+        for section in self.xml_root.findall('.//ap:section', self.ns):
+            content = section.find('ap:content', self.ns)
+            if content is not None and content.text:
+                all_text += content.text + " "
         
-        # Fallback: look for any citation elements regardless of namespace
+        # Find citation patterns like [Author Name], [T. Brants], etc.
+        citation_pattern = r'\[[A-Z][A-Za-z\s\.,]+\]'
+        citations = re.findall(citation_pattern, all_text)
+        
+        # Filter out non-citation brackets (URLs, notes, etc.)
+        filtered_citations = []
+        for cite in citations:
+            # Skip if it contains URLs or common non-citation patterns
+            if not any(pattern in cite.lower() for pattern in ['http', 'www', 'thank', 'available at']):
+                filtered_citations.append(cite)
+        
+        return filtered_citations
         for elem in self.xml_root.iter():
             if elem.tag.endswith('citation'):
                 citations_any = [elem.text for elem in self.xml_root.iter() if elem.tag.endswith('citation') and elem.text]
