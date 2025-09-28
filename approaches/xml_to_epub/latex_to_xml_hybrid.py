@@ -25,22 +25,19 @@ class StructuralExtractor:
     def __init__(self, latex_content: str):
         self.soup = TexSoup(latex_content)
         self.latex_content = latex_content
+        self.bedrock = boto3.client('bedrock-runtime', region_name='us-east-1')
     
     def extract_metadata(self) -> Dict[str, str]:
-        """Extract title, authors, abstract"""
+        """Extract title, authors, abstract using LLM for complex parsing"""
         metadata = {}
         
-        # Title
+        # Title - try TexSoup first
         title = self.soup.find('title')
         if title and title.string:
             metadata['title'] = str(title.string).strip()
         
-        # Author (simplified - first author only)
-        author = self.soup.find('author')
-        if author:
-            # Extract first line before \\
-            author_text = str(author).split('\\\\')[0]
-            metadata['author'] = author_text.strip()
+        # Authors - use LLM for cognitive extraction
+        metadata['authors'] = self._extract_authors_with_llm()
         
         # Abstract
         abstract = self.soup.find('abstract')
@@ -48,6 +45,72 @@ class StructuralExtractor:
             metadata['abstract'] = str(abstract).strip()
         
         return metadata
+    
+    def _extract_authors_with_llm(self) -> List[Dict[str, str]]:
+        """Extract authors using pylatexenc + Bedrock LLM"""
+        from pylatexenc.latexwalker import LatexWalker
+        
+        try:
+            # Use pylatexenc to properly parse LaTeX and find \author commands
+            walker = LatexWalker(self.latex_content)
+            nodes = walker.get_latex_nodes()[0]
+            
+            # Find \author macro
+            author_block = None
+            for node in nodes:
+                if hasattr(node, 'macroname') and node.macroname == 'author':
+                    if node.nodeargd and node.nodeargd.argnlist:
+                        # Get the argument content
+                        author_block = node.nodeargd.argnlist[0].latex_verbatim()
+                        break
+            
+            if not author_block:
+                return []
+            
+            prompt = f"""Extract ALL author information from this LaTeX author block. Pay attention to LaTeX separators like \\And and \\AND which separate different authors.
+
+AUTHOR BLOCK:
+{author_block}
+
+IMPORTANT: 
+- \\And and \\AND separate different authors
+- \\\\ separates lines within the same author's information
+- Extract ALL authors, not just the first one
+- Each author should be a separate object in the array
+
+Return a JSON array with ALL author objects:
+[
+  {{
+    "name": "Author Name",
+    "affiliation": "Institution",
+    "email": "email@domain.com"
+  }},
+  {{
+    "name": "Second Author Name", 
+    "affiliation": "Institution",
+    "email": "email2@domain.com"
+  }}
+]
+
+Return ONLY the JSON array. Make sure to extract ALL authors mentioned."""
+            
+            response = self.bedrock.converse(
+                modelId="us.anthropic.claude-3-5-sonnet-20241022-v2:0",
+                messages=[{"role": "user", "content": [{"text": prompt}]}],
+                inferenceConfig={"maxTokens": 1500, "temperature": 0.1}
+            )
+            
+            llm_response = response['output']['message']['content'][0]['text']
+            json_match = re.search(r'\[.*\]', llm_response, re.DOTALL)
+            if json_match:
+                authors = json.loads(json_match.group(0))
+                print(f"   ✅ Extracted {len(authors)} authors")
+                return authors
+                
+        except Exception as e:
+            print(f"   ⚠️ Author extraction failed: {e}")
+        
+        return []
     
     def extract_sections(self) -> List[Dict[str, str]]:
         """Extract sections and their complete content"""
@@ -123,13 +186,51 @@ class StructuralExtractor:
         return equations
     
     def extract_structured_elements(self) -> Dict[str, List]:
-        """Extract tables and figures (equations handled separately)"""
+        """Extract tables, figures, inline math, and citations"""
         return {
             'tables': [{'id': f"table_{i+1}", 'content': str(table)} 
                       for i, table in enumerate(self.soup.find_all('table'))],
             'figures': [{'id': f"figure_{i+1}", 'content': str(fig)} 
-                       for i, fig in enumerate(self.soup.find_all('figure'))]
+                       for i, fig in enumerate(self.soup.find_all('figure'))],
+            'inline_math': self._extract_inline_math(),
+            'citations': self._extract_citations()
         }
+    
+    def _extract_inline_math(self) -> List[Dict[str, str]]:
+        """Extract inline math expressions $...$"""
+        inline_math = []
+        # Find inline math patterns
+        patterns = [r'\$([^$]+)\$', r'\\([^)]+\\)']
+        
+        math_count = 0
+        for pattern in patterns:
+            matches = re.finditer(pattern, self.latex_content)
+            for match in matches:
+                math_count += 1
+                inline_math.append({
+                    'id': f"math_{math_count}",
+                    'content': match.group(1).strip()
+                })
+        
+        return inline_math
+    
+    def _extract_citations(self) -> List[Dict[str, str]]:
+        """Extract citation commands \\cite{...}"""
+        citations = []
+        cite_pattern = r'\\cite(?:\[[^\]]*\])?\{([^}]+)\}'
+        matches = re.finditer(cite_pattern, self.latex_content)
+        
+        cite_count = 0
+        for match in matches:
+            cite_count += 1
+            ref_keys = match.group(1).split(',')
+            for key in ref_keys:
+                citations.append({
+                    'id': f"cite_{cite_count}",
+                    'ref_key': key.strip()
+                })
+        
+        return citations
 
 class ContentCleaner:
     """Phase 2: Clean LaTeX content and replace equations with references"""
@@ -137,12 +238,17 @@ class ContentCleaner:
     def __init__(self):
         self.cleaner = LatexNodes2Text()
     
-    def clean_metadata(self, metadata: Dict[str, str]) -> Dict[str, str]:
+    def clean_metadata(self, metadata: Dict[str, Any]) -> Dict[str, Any]:
         """Clean LaTeX commands from metadata"""
         cleaned = {}
         for key, value in metadata.items():
-            if value:
+            if key == 'authors':
+                # Authors is already processed by LLM, keep as-is
+                cleaned[key] = value
+            elif value and isinstance(value, str):
                 cleaned[key] = self.cleaner.latex_to_text(value)
+            else:
+                cleaned[key] = value
         return cleaned
     
     def clean_sections_with_inline_equations(self, sections: List[Dict[str, str]], equations: List[Dict[str, str]]) -> List[Dict[str, str]]:
@@ -252,7 +358,7 @@ Return ONLY the JSON array. Extract complete information for each entry."""
 class XMLAssembler:
     """Phase 4: Assemble schema-compliant XML with MathML"""
     
-    def assemble(self, metadata: Dict, sections: List, references: List, elements: Dict) -> str:
+    def assemble(self, metadata: Dict, sections: List, references: List, equations: List, elements: Dict) -> str:
         """Generate XML with proper namespaces for XSLT compatibility"""
         
         xml_lines = [
@@ -265,14 +371,19 @@ class XMLAssembler:
         if metadata.get('title'):
             xml_lines.append(f'    <title>{self._escape_xml(metadata["title"])}</title>')
         
-        if metadata.get('author'):
-            xml_lines.extend([
-                '    <authors>',
-                '      <author>',
-                f'        <name>{self._escape_xml(metadata["author"])}</name>',
-                '      </author>',
-                '    </authors>'
-            ])
+        # Authors (from LLM extraction)
+        if metadata.get('authors'):
+            xml_lines.append('    <authors>')
+            for author in metadata['authors']:
+                xml_lines.append('      <author>')
+                if author.get('name'):
+                    xml_lines.append(f'        <name>{self._escape_xml(author["name"])}</name>')
+                if author.get('affiliation'):
+                    xml_lines.append(f'        <affiliation>{self._escape_xml(author["affiliation"])}</affiliation>')
+                if author.get('email'):
+                    xml_lines.append(f'        <email>{self._escape_xml(author["email"])}</email>')
+                xml_lines.append('      </author>')
+            xml_lines.append('    </authors>')
         
         if metadata.get('abstract'):
             xml_lines.append(f'    <abstract>{self._escape_xml(metadata["abstract"])}</abstract>')
@@ -312,6 +423,29 @@ class XMLAssembler:
                 ])
             xml_lines.append('  </sections>')
         
+        # Equations (separate elements for StructuralReviewer compatibility)
+        if equations:
+            xml_lines.append('  <equations>')
+            for eq in equations:
+                xml_lines.append(f'    <equation id="{eq["id"]}">')
+                xml_lines.append(f'      <content>{self._escape_xml(eq["latex"])}</content>')
+                xml_lines.append('    </equation>')
+            xml_lines.append('  </equations>')
+        
+        # Inline math (for StructuralReviewer counting)
+        if elements.get('inline_math'):
+            xml_lines.append('  <inline_math>')
+            for math in elements['inline_math']:
+                xml_lines.append(f'    <math id="{math["id"]}">{self._escape_xml(math["content"])}</math>')
+            xml_lines.append('  </inline_math>')
+        
+        # Citations (for StructuralReviewer counting)
+        if elements.get('citations'):
+            xml_lines.append('  <citations>')
+            for cite in elements['citations']:
+                xml_lines.append(f'    <citation id="{cite["id"]}" ref="{cite["ref_key"]}"/>')
+            xml_lines.append('  </citations>')
+        
         # References
         if references:
             xml_lines.append('  <references>')
@@ -333,7 +467,7 @@ class XMLAssembler:
         
         # Other elements
         for element_type, items in elements.items():
-            if items:
+            if items and element_type not in ['inline_math', 'citations']:
                 xml_lines.append(f'  <{element_type}>')
                 for item in items:
                     xml_lines.extend([
@@ -402,7 +536,7 @@ class HybridLatexToXmlConverter:
         
         # Phase 4: XML assembly
         print("📄 Phase 4: Assembling XML with inline MathML...")
-        xml_content = self.assembler.assemble(clean_metadata, clean_sections, references, elements)
+        xml_content = self.assembler.assemble(clean_metadata, clean_sections, references, equations, elements)
         
         # Phase 5: Quality assessment
         print("🔍 Phase 5: Quality assessment...")
