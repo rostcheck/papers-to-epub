@@ -442,14 +442,41 @@ class RulesBasedConverter:
         self._add_processed_content(p_elem, processed_text)
     
     def _process_text_content(self, text: str) -> str:
-        """Process text to convert inline math and mark citations"""
-        # First convert inline math to placeholder format
-        def replace_math(match):
-            math_content = match.group(1).replace('\\\\', '\\')
-            return f'<MATH>{math_content}</MATH>'
+        """Process text to convert inline math and mark citations using standard libraries"""
+        from latex2mathml.converter import convert as latex_to_mathml
         
-        # Convert $...$ to placeholders
+        # First convert inline math to placeholder format using latex2mathml
+        def replace_math(match):
+            math_content = match.group(1)
+            try:
+                # Convert LaTeX math to MathML using standard library
+                mathml = latex_to_mathml(math_content, display='inline')
+                # Extract just the inner content (remove outer <math> tags for placeholder)
+                import re
+                inner_match = re.search(r'<math[^>]*>(.*)</math>', mathml, re.DOTALL)
+                if inner_match:
+                    return f'<MATHML>{inner_match.group(1)}</MATHML>'
+                else:
+                    return f'<MATHML><mi>{math_content}</mi></MATHML>'
+            except Exception:
+                # Fallback to simple math element
+                return f'<MATHML><mi>{math_content}</mi></MATHML>'
+        
+        # Convert $...$ to MathML placeholders
         text_with_math = re.sub(r'\$([^$]+)\$', replace_math, text)
+        
+        # Convert LaTeX text formatting using simple patterns (more reliable than plasTeX for simple cases)
+        def replace_textit(match):
+            return f'<EM>{match.group(1)}</EM>'
+        
+        def replace_textbf(match):
+            return f'<STRONG>{match.group(1)}</STRONG>'
+        
+        # Handle common LaTeX text formatting
+        text_with_formatting = re.sub(r'\\textit\{([^}]+)\}', replace_textit, text_with_math)
+        text_with_formatting = re.sub(r'\\textbf\{([^}]+)\}', replace_textbf, text_with_formatting)
+        text_with_formatting = re.sub(r'\{\\it\s+([^}]+)\}', replace_textit, text_with_formatting)
+        text_with_formatting = re.sub(r'\{\\bf\s+([^}]+)\}', replace_textbf, text_with_formatting)
         
         # Mark citations for processing
         def replace_citation(match):
@@ -457,30 +484,56 @@ class RulesBasedConverter:
             citations = ''.join(f'<CITE>{key.strip()}</CITE>' for key in cite_keys)
             return citations
         
-        # Convert citations to placeholders
-        citation_pattern = r'\\cite(?:p)?\{([^}]+)\}'
-        processed_text = re.sub(citation_pattern, replace_citation, text_with_math)
+        # Convert citations to placeholders (including LaTeX ~ non-breaking space)
+        citation_pattern = r'~?\\cite(?:p)?\{([^}]+)\}'
+        processed_text = re.sub(citation_pattern, replace_citation, text_with_formatting)
         
         return processed_text
     
     def _add_processed_content(self, parent_elem: ET.Element, content: str) -> None:
-        """Add processed content with math and citation elements"""
+        """Add processed content with proper MathML, formatting, and citation elements"""
         # Split content by placeholders and add elements
-        parts = re.split(r'(<MATH>.*?</MATH>|<CITE>.*?</CITE>)', content)
+        parts = re.split(r'(<MATHML>.*?</MATHML>|<CITE>.*?</CITE>|<EM>.*?</EM>|<STRONG>.*?</STRONG>)', content)
         
         for part in parts:
-            if part.startswith('<MATH>') and part.endswith('</MATH>'):
-                # Add MathML element
-                math_content = part[6:-7]  # Remove <MATH> tags
+            if part.startswith('<MATHML>') and part.endswith('</MATHML>'):
+                # Add proper MathML element with namespace
+                mathml_content = part[8:-9]  # Remove <MATHML> tags
                 math_elem = ET.SubElement(parent_elem, 'math')
                 math_elem.set('xmlns', 'http://www.w3.org/1998/Math/MathML')
-                mi_elem = ET.SubElement(math_elem, 'mi')
-                mi_elem.text = math_content
+                # Parse and add the MathML content
+                try:
+                    # Create a temporary element to parse the MathML content
+                    temp_xml = f'<temp xmlns:m="http://www.w3.org/1998/Math/MathML">{mathml_content}</temp>'
+                    temp_elem = ET.fromstring(temp_xml)
+                    # Copy all child elements to the math element
+                    for child in temp_elem:
+                        math_elem.append(child)
+                    # If no children, add the text content directly
+                    if len(temp_elem) == 0 and temp_elem.text:
+                        mi_elem = ET.SubElement(math_elem, 'mi')
+                        mi_elem.text = temp_elem.text
+                except:
+                    # Fallback: create simple mi element
+                    mi_elem = ET.SubElement(math_elem, 'mi')
+                    mi_elem.text = mathml_content.strip()
             elif part.startswith('<CITE>') and part.endswith('</CITE>'):
                 # Add citation element
                 cite_key = part[6:-7]  # Remove <CITE> tags
                 citation_elem = ET.SubElement(parent_elem, 'citation')
                 citation_elem.text = cite_key
+            elif part.startswith('<EM>') and part.endswith('</EM>'):
+                # Add italic element
+                em_content = part[4:-5]  # Remove <EM> tags
+                em_elem = ET.SubElement(parent_elem, 'em')
+                em_elem.set('xmlns', 'http://www.w3.org/1999/xhtml')
+                em_elem.text = em_content
+            elif part.startswith('<STRONG>') and part.endswith('</STRONG>'):
+                # Add bold element
+                strong_content = part[8:-9]  # Remove <STRONG> tags
+                strong_elem = ET.SubElement(parent_elem, 'strong')
+                strong_elem.set('xmlns', 'http://www.w3.org/1999/xhtml')
+                strong_elem.text = strong_content
             elif part:
                 # Add text content
                 if parent_elem.text is None:
