@@ -240,96 +240,176 @@ Return ONLY the JSON array. Make sure to extract ALL authors mentioned."""
         }
     
     def _parse_latex_tables(self) -> List[Dict]:
-        """Parse LaTeX tables using TexSoup API + string splitting"""
-        from pylatexenc.latex2text import LatexNodes2Text
-        
+        """Parse LaTeX tables using Bedrock AI for all tables"""
         tables = []
         
         for i, table in enumerate(self.soup.find_all('table')):
             table_content = str(table)
             
-            # Extract caption using TexSoup API - clean with latex2text
-            caption = f"Table {i+1}"
-            if table.caption:
-                raw_caption = table.caption.string
-                if raw_caption:
-                    # Clean LaTeX formatting but let XSLT handle italic styling
-                    l2t = LatexNodes2Text()
-                    caption = l2t.latex_to_text(raw_caption).strip()
+            # Use Bedrock for all tables
+            print(f"   🧠 Using Bedrock AI for table {i+1}...")
+            bedrock_result = self._parse_table_with_bedrock(table_content, f"table_{i+1}")
+            if bedrock_result:
+                tables.append(bedrock_result)
+            else:
+                print(f"   ⚠️ Bedrock failed, skipping table {i+1}")
+        
+        return tables
+    
+    def _parse_table_with_bedrock(self, table_content: str, table_id: str) -> Dict:
+        """Use Bedrock to parse table structure with disk cache"""
+        import json
+        import boto3
+        import hashlib
+        import os
+        from pathlib import Path
+        
+        # Create cache key from prompt + content
+        cache_key = hashlib.md5(f"table_parse_{table_content}".encode()).hexdigest()
+        cache_file = Path("output") / f"bedrock_cache_{cache_key}.json"
+        
+        # Check cache first
+        if cache_file.exists():
+            try:
+                with open(cache_file, 'r') as f:
+                    cached_result = json.load(f)
+                print(f"   💾 Using cached result for {table_id}")
+                return cached_result
+            except:
+                pass  # Cache corrupted, proceed with API call
+
+        try:
+            bedrock = boto3.client('bedrock-runtime', region_name='us-east-1')
             
-            # Extract tabular content using TexSoup API
-            headers = []
-            rows = []
-            tabular = table.find('tabular')
+            prompt = f"""Parse this LaTeX table into structured JSON format. Extract the caption, headers, and data rows.
+
+LaTeX Table:
+{table_content}
+
+Return ONLY a JSON object with this structure:
+{{
+    "caption": "table caption text (clean, no LaTeX commands)",
+    "headers": ["header1", "header2", "header3"],
+    "rows": [
+        ["cell1", "cell2", "cell3"],
+        ["cell4", "cell5", "cell6"]
+    ]
+}}
+
+Rules:
+- Clean all LaTeX commands from text
+- Handle multicolumn by repeating headers as needed
+- Convert \\% to %
+- Merge multi-row headers into single descriptive headers
+- Return valid JSON only, no explanation"""
+
+            body = json.dumps({
+                "anthropic_version": "bedrock-2023-05-31",
+                "max_tokens": 2000,
+                "messages": [{"role": "user", "content": prompt}]
+            })
             
-            if tabular and tabular.contents:
-                current_row = []
-                
-                for item in tabular.contents:
-                    item_str = str(item).strip()
-                    
-                    # Skip column specification (first item, contains |l|c| etc)
-                    if '|' in item_str and all(c in 'lcrp|' for c in item_str.replace('|', '')):
-                        continue
-                    
-                    # Skip hline commands
-                    if item_str.startswith('\\hline'):
-                        continue
-                    
-                    if item_str == r'\\':
-                        # End of row
-                        if current_row:
-                            if not headers:
-                                headers = current_row
-                            else:
-                                rows.append(current_row)
-                            current_row = []
-                    else:
-                        # Skip commented rows
-                        if item_str.startswith('%'):
-                            continue
-                            
-                        # Handle multicolumn commands
-                        if '\\multicolumn' in item_str:
-                            # Extract: \multicolumn{span}{align}{content}
-                            import re
-                            match = re.search(r'\\multicolumn\{(\d+)\}\{[^}]*\}\{([^}]*)\}', item_str)
-                            if match:
-                                colspan = int(match.group(1))
-                                content = match.group(2).strip()
-                                # Clean content with latex2text
-                                l2t = LatexNodes2Text()
-                                clean_content = l2t.latex_to_text(content).strip()
-                                current_row.append({'content': clean_content, 'colspan': colspan})
-                            continue
-                        
-                        # Regular cell content - split by &
-                        if item_str and not item_str.startswith('\\'):
-                            cells = [cell.strip() for cell in item_str.split('&')]
-                            for cell in cells:
-                                if cell:
-                                    # Clean each cell with latex2text
-                                    l2t = LatexNodes2Text()
-                                    clean_cell = l2t.latex_to_text(cell).strip()
-                                    if clean_cell:
-                                        current_row.append({'content': clean_cell, 'colspan': 1})
-                
-                # Add last row if any
-                if current_row:
-                    if not headers:
-                        headers = current_row
-                    else:
-                        rows.append(current_row)
+            response = bedrock.invoke_model(
+                modelId='anthropic.claude-3-sonnet-20240229-v1:0',
+                body=body
+            )
             
-            tables.append({
-                'id': f"table_{i+1}",
-                'caption': caption,
+            response_body = json.loads(response['body'].read())
+            result_text = response_body['content'][0]['text'].strip()
+            
+            # Parse the JSON response
+            table_data = json.loads(result_text)
+            
+            # Convert to our format
+            headers = [{'content': h, 'colspan': 1} for h in table_data.get('headers', [])]
+            rows = [[{'content': cell, 'colspan': 1} for cell in row] for row in table_data.get('rows', [])]
+            
+            result = {
+                'id': table_id,
+                'caption': table_data.get('caption', f'Table {table_id}'),
                 'headers': headers,
                 'rows': rows,
                 'content': table_content
-            })
+            }
+            
+            # Cache the result
+            try:
+                os.makedirs("output", exist_ok=True)
+                print(f"   💾 Caching result to {cache_file}")
+                with open(cache_file, 'w') as f:
+                    json.dump(result, f)
+                print(f"   ✅ Cache saved successfully")
+            except Exception as cache_error:
+                print(f"   ⚠️ Cache write failed: {cache_error}")
+            
+            return result
+            
+        except Exception as e:
+            print(f"   ⚠️ Bedrock parsing failed for {table_id}: {e}")
+            return None
+    
+    def _parse_table_with_bedrock(self, table_content: str, table_id: str) -> Dict:
+        """Experimental: Use Bedrock to parse table structure"""
+        import json
+        import boto3
         
-        return tables
+        try:
+            bedrock = boto3.client('bedrock-runtime', region_name='us-east-1')
+            
+            prompt = f"""Parse this LaTeX table into structured JSON format. Extract the caption, headers, and data rows.
+
+LaTeX Table:
+{table_content}
+
+Return ONLY a JSON object with this structure:
+{{
+    "caption": "table caption text (clean, no LaTeX commands)",
+    "headers": ["header1", "header2", "header3"],
+    "rows": [
+        ["cell1", "cell2", "cell3"],
+        ["cell4", "cell5", "cell6"]
+    ]
+}}
+
+Rules:
+- Clean all LaTeX commands from text
+- Handle multicolumn by repeating headers as needed
+- Convert \\% to %
+- Merge multi-row headers into single descriptive headers
+- Return valid JSON only, no explanation"""
+
+            body = json.dumps({
+                "anthropic_version": "bedrock-2023-05-31",
+                "max_tokens": 2000,
+                "messages": [{"role": "user", "content": prompt}]
+            })
+            
+            response = bedrock.invoke_model(
+                modelId='anthropic.claude-3-sonnet-20240229-v1:0',
+                body=body
+            )
+            
+            response_body = json.loads(response['body'].read())
+            result_text = response_body['content'][0]['text'].strip()
+            
+            # Parse the JSON response
+            table_data = json.loads(result_text)
+            
+            # Convert to our format
+            headers = [{'content': h, 'colspan': 1} for h in table_data.get('headers', [])]
+            rows = [[{'content': cell, 'colspan': 1} for cell in row] for row in table_data.get('rows', [])]
+            
+            return {
+                'id': table_id,
+                'caption': table_data.get('caption', f'Table {table_id}'),
+                'headers': headers,
+                'rows': rows,
+                'content': table_content
+            }
+            
+        except Exception as e:
+            print(f"   ⚠️ Bedrock parsing failed for {table_id}: {e}")
+            return None
     
     def _extract_inline_math(self) -> List[Dict[str, str]]:
         """Extract inline math expressions $...$"""
@@ -412,13 +492,24 @@ class ContentCleaner:
                         citation_map[placeholder] = cite
                         content = content.replace(cite['full_match'], placeholder)
                 
-                # Third: Replace tables with placeholders
+                # Third: Replace tables with placeholders using robust pattern matching
                 table_map = {}
                 for i, table in enumerate(tables):
-                    if table.get('content') and table['content'] in content:
-                        placeholder = f"__TABLE_PLACEHOLDER_{i}__"
-                        table_map[placeholder] = table
-                        content = content.replace(table['content'], placeholder)
+                    if table.get('content'):
+                        # Use regex to find table patterns instead of exact matching
+                        import re
+                        # Look for table environment patterns
+                        table_pattern = r'\\begin\{table\}.*?\\end\{table\}'
+                        matches = re.finditer(table_pattern, content, re.DOTALL)
+                        
+                        for match in matches:
+                            table_text = match.group(0)
+                            # Check if this table contains similar content to our parsed table
+                            if self._tables_match(table_text, table):
+                                placeholder = f"__TABLE_PLACEHOLDER_{i}__"
+                                table_map[placeholder] = table
+                                content = content.replace(table_text, placeholder)
+                                break
                 
                 # Second: Clean all LaTeX commands (placeholders are safe)
                 content = self.cleaner.latex_to_text(content)
@@ -490,6 +581,108 @@ class ContentCleaner:
         xml_lines.append('</ap:table>')
         return '\n'.join(xml_lines)
     
+    def _parse_table_with_bedrock(self, table_content: str, table_id: str) -> Dict:
+        """Experimental: Use Bedrock to parse table structure"""
+        import json
+        import boto3
+        
+        try:
+            bedrock = boto3.client('bedrock-runtime', region_name='us-east-1')
+            
+            prompt = f"""Parse this LaTeX table into structured JSON format. Extract the caption, headers, and data rows.
+
+LaTeX Table:
+{table_content}
+
+Return ONLY a JSON object with this structure:
+{{
+    "caption": "table caption text (clean, no LaTeX commands)",
+    "headers": ["header1", "header2", "header3"],
+    "rows": [
+        ["cell1", "cell2", "cell3"],
+        ["cell4", "cell5", "cell6"]
+    ]
+}}
+
+Rules:
+- Clean all LaTeX commands from text
+- Handle multicolumn by repeating headers as needed
+- Convert \\% to %
+- Merge multi-row headers into single descriptive headers
+- Return valid JSON only, no explanation"""
+
+            body = json.dumps({
+                "anthropic_version": "bedrock-2023-05-31",
+                "max_tokens": 2000,
+                "messages": [{"role": "user", "content": prompt}]
+            })
+            
+            response = bedrock.invoke_model(
+                modelId='anthropic.claude-3-sonnet-20240229-v1:0',
+                body=body
+            )
+            
+            response_body = json.loads(response['body'].read())
+            result_text = response_body['content'][0]['text'].strip()
+            
+            # Parse the JSON response
+            table_data = json.loads(result_text)
+            
+            # Convert to our format
+            headers = [{'content': h, 'colspan': 1} for h in table_data.get('headers', [])]
+            rows = [[{'content': cell, 'colspan': 1} for cell in row] for row in table_data.get('rows', [])]
+            
+            return {
+                'id': table_id,
+                'caption': table_data.get('caption', f'Table {table_id}'),
+                'headers': headers,
+                'rows': rows,
+                'content': table_content
+            }
+            
+        except Exception as e:
+            print(f"   ⚠️ Bedrock parsing failed for {table_id}: {e}")
+            return None
+        """Check if LaTeX table text matches parsed table using key patterns"""
+        # Check if caption matches
+        caption = parsed_table.get('caption', '')
+        if caption and len(caption) > 10:
+            # Look for key words from caption in table text
+            caption_words = caption.lower().split()[:3]  # First 3 words
+            if all(word in table_text.lower() for word in caption_words if len(word) > 3):
+                return True
+        
+        # Check if key header content matches
+        headers = parsed_table.get('headers', [])
+        if headers:
+            for header in headers[:2]:  # Check first 2 headers
+                if isinstance(header, dict):
+                    header_content = header.get('content', '')
+                else:
+                    header_content = str(header)
+                
+                if header_content and len(header_content) > 3:
+                    if header_content.lower() in table_text.lower():
+                        return True
+        
+        return False
+    
+    def _is_header_row(self, row: List[Dict]) -> bool:
+        """Check if a row looks like a header row (contains descriptive text, not just numbers)"""
+        if not row:
+            return False
+        
+        # Check if most cells contain text rather than just numbers
+        text_cells = 0
+        for cell in row:
+            content = cell.get('content', '') if isinstance(cell, dict) else str(cell)
+            # Header cells typically contain words, not just numbers
+            if content and not content.replace('.', '').replace('%', '').isdigit():
+                text_cells += 1
+        
+        # If more than half the cells contain text, it's likely a header
+        return text_cells > len(row) / 2
+    
     def _escape_xml(self, text: str) -> str:
         """Escape XML special characters"""
         if not text:
@@ -500,6 +693,15 @@ class ContentCleaner:
                 .replace('>', '&gt;')
                 .replace('"', '&quot;')
                 .replace("'", '&#39;'))
+    def _tables_match(self, table_text: str, parsed_table: Dict) -> bool:
+        """Check if LaTeX table text matches parsed table using key patterns"""
+        caption = parsed_table.get('caption', '')
+        if caption and len(caption) > 10:
+            caption_words = caption.lower().split()[:3]
+            if all(word in table_text.lower() for word in caption_words if len(word) > 3):
+                return True
+        return False
+
 
 class UnstructuredProcessor:
     """Phase 3: Process unstructured elements with LLM"""
