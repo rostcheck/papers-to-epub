@@ -139,7 +139,7 @@ class StructuralReviewer:
             'authors': {
                 'latex': len(latex_authors),
                 'xml': len(xml_authors),
-                'match_ratio': len(xml_authors) / max(len(latex_authors), 1)
+                'match_ratio': min(len(xml_authors), len(latex_authors)) / max(len(latex_authors), 1)
             },
             'abstract': {
                 'latex_chars': len(latex_abstract),
