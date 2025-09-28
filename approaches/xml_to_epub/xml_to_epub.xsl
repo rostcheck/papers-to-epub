@@ -205,6 +205,13 @@
     <xsl:value-of select="."/>
   </xsl:template>
 
+
+  <!-- Citations -->
+  <xsl:template match="ap:citation">
+    <span class="citation">[<xsl:value-of select="."/>]</span>
+  </xsl:template>
+
+
   <!-- Tables -->
   <xsl:template match="ap:table">
     <div class="table" id="{@id}">
