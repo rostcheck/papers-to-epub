@@ -232,13 +232,104 @@ Return ONLY the JSON array. Make sure to extract ALL authors mentioned."""
     def extract_structured_elements(self) -> Dict[str, List]:
         """Extract tables, figures, inline math, and citations"""
         return {
-            'tables': [{'id': f"table_{i+1}", 'content': str(table)} 
-                      for i, table in enumerate(self.soup.find_all('table'))],
+            'tables': self._parse_latex_tables(),
             'figures': [{'id': f"figure_{i+1}", 'content': str(fig)} 
                        for i, fig in enumerate(self.soup.find_all('figure'))],
             'inline_math': self._extract_inline_math(),
             'citations': self._extract_citations()
         }
+    
+    def _parse_latex_tables(self) -> List[Dict]:
+        """Parse LaTeX tables using TexSoup API + string splitting"""
+        from pylatexenc.latex2text import LatexNodes2Text
+        
+        tables = []
+        
+        for i, table in enumerate(self.soup.find_all('table')):
+            table_content = str(table)
+            
+            # Extract caption using TexSoup API - clean with latex2text
+            caption = f"Table {i+1}"
+            if table.caption:
+                raw_caption = table.caption.string
+                if raw_caption:
+                    # Clean LaTeX formatting but let XSLT handle italic styling
+                    l2t = LatexNodes2Text()
+                    caption = l2t.latex_to_text(raw_caption).strip()
+            
+            # Extract tabular content using TexSoup API
+            headers = []
+            rows = []
+            tabular = table.find('tabular')
+            
+            if tabular and tabular.contents:
+                current_row = []
+                
+                for item in tabular.contents:
+                    item_str = str(item).strip()
+                    
+                    # Skip column specification (first item, contains |l|c| etc)
+                    if '|' in item_str and all(c in 'lcrp|' for c in item_str.replace('|', '')):
+                        continue
+                    
+                    # Skip hline commands
+                    if item_str.startswith('\\hline'):
+                        continue
+                    
+                    if item_str == r'\\':
+                        # End of row
+                        if current_row:
+                            if not headers:
+                                headers = current_row
+                            else:
+                                rows.append(current_row)
+                            current_row = []
+                    else:
+                        # Skip commented rows
+                        if item_str.startswith('%'):
+                            continue
+                            
+                        # Handle multicolumn commands
+                        if '\\multicolumn' in item_str:
+                            # Extract: \multicolumn{span}{align}{content}
+                            import re
+                            match = re.search(r'\\multicolumn\{(\d+)\}\{[^}]*\}\{([^}]*)\}', item_str)
+                            if match:
+                                colspan = int(match.group(1))
+                                content = match.group(2).strip()
+                                # Clean content with latex2text
+                                l2t = LatexNodes2Text()
+                                clean_content = l2t.latex_to_text(content).strip()
+                                current_row.append({'content': clean_content, 'colspan': colspan})
+                            continue
+                        
+                        # Regular cell content - split by &
+                        if item_str and not item_str.startswith('\\'):
+                            cells = [cell.strip() for cell in item_str.split('&')]
+                            for cell in cells:
+                                if cell:
+                                    # Clean each cell with latex2text
+                                    l2t = LatexNodes2Text()
+                                    clean_cell = l2t.latex_to_text(cell).strip()
+                                    if clean_cell:
+                                        current_row.append({'content': clean_cell, 'colspan': 1})
+                
+                # Add last row if any
+                if current_row:
+                    if not headers:
+                        headers = current_row
+                    else:
+                        rows.append(current_row)
+            
+            tables.append({
+                'id': f"table_{i+1}",
+                'caption': caption,
+                'headers': headers,
+                'rows': rows,
+                'content': table_content
+            })
+        
+        return tables
     
     def _extract_inline_math(self) -> List[Dict[str, str]]:
         """Extract inline math expressions $...$"""
@@ -295,7 +386,7 @@ class ContentCleaner:
                 cleaned[key] = value
         return cleaned
     
-    def clean_sections_with_inline_equations(self, sections: List[Dict[str, str]], equations: List[Dict[str, str]], citations: List[Dict[str, str]], references: List[Dict[str, str]]) -> List[Dict[str, str]]:
+    def clean_sections_with_inline_equations(self, sections: List[Dict[str, str]], equations: List[Dict[str, str]], citations: List[Dict[str, str]], references: List[Dict[str, str]], tables: List[Dict]) -> List[Dict[str, str]]:
         """Clean LaTeX commands from sections and embed MathML equations inline"""
         cleaned = []
         for section in sections:
@@ -321,6 +412,14 @@ class ContentCleaner:
                         citation_map[placeholder] = cite
                         content = content.replace(cite['full_match'], placeholder)
                 
+                # Third: Replace tables with placeholders
+                table_map = {}
+                for i, table in enumerate(tables):
+                    if table.get('content') and table['content'] in content:
+                        placeholder = f"__TABLE_PLACEHOLDER_{i}__"
+                        table_map[placeholder] = table
+                        content = content.replace(table['content'], placeholder)
+                
                 # Second: Clean all LaTeX commands (placeholders are safe)
                 content = self.cleaner.latex_to_text(content)
                 
@@ -337,7 +436,12 @@ class ContentCleaner:
                     citation_text = f"[{', '.join(author_names)}]"
                     content = content.replace(placeholder, citation_text)
                 
-                # Fourth: Convert equation LaTeX to MathML and replace placeholders
+                # Fourth: Replace table placeholders with XML table elements
+                for placeholder, table in table_map.items():
+                    table_xml = self._generate_table_xml(table)
+                    content = content.replace(placeholder, table_xml)
+                
+                # Fifth: Convert equation LaTeX to MathML and replace placeholders
                 for placeholder, eq in equation_map.items():
                     if eq.get('latex'):
                         try:
@@ -352,6 +456,50 @@ class ContentCleaner:
                 cleaned_section['content'] = content
             cleaned.append(cleaned_section)
         return cleaned
+    
+    def _generate_table_xml(self, table: Dict) -> str:
+        """Generate XML table element from structured table data"""
+        xml_lines = [f'<ap:table xmlns:ap="http://example.com/academic-paper" id="{table["id"]}">']
+        
+        if table.get('caption'):
+            xml_lines.append(f'  <ap:caption>{self._escape_xml(table["caption"])}</ap:caption>')
+        
+        if table.get('headers'):
+            xml_lines.append('  <ap:headers>')
+            for header in table['headers']:
+                if isinstance(header, dict):
+                    colspan_attr = f' colspan="{header["colspan"]}"' if header.get('colspan', 1) > 1 else ''
+                    xml_lines.append(f'    <ap:header{colspan_attr}>{self._escape_xml(header["content"])}</ap:header>')
+                else:
+                    xml_lines.append(f'    <ap:header>{self._escape_xml(header)}</ap:header>')
+            xml_lines.append('  </ap:headers>')
+        
+        if table.get('rows'):
+            xml_lines.append('  <ap:rows>')
+            for row in table['rows']:
+                xml_lines.append('    <ap:row>')
+                for cell in row:
+                    if isinstance(cell, dict):
+                        colspan_attr = f' colspan="{cell["colspan"]}"' if cell.get('colspan', 1) > 1 else ''
+                        xml_lines.append(f'      <ap:cell{colspan_attr}>{self._escape_xml(cell["content"])}</ap:cell>')
+                    else:
+                        xml_lines.append(f'      <ap:cell>{self._escape_xml(cell)}</ap:cell>')
+                xml_lines.append('    </ap:row>')
+            xml_lines.append('  </ap:rows>')
+        
+        xml_lines.append('</ap:table>')
+        return '\n'.join(xml_lines)
+    
+    def _escape_xml(self, text: str) -> str:
+        """Escape XML special characters"""
+        if not text:
+            return ""
+        return (str(text)
+                .replace('&', '&amp;')
+                .replace('<', '&lt;')
+                .replace('>', '&gt;')
+                .replace('"', '&quot;')
+                .replace("'", '&#39;'))
 
 class UnstructuredProcessor:
     """Phase 3: Process unstructured elements with LLM"""
@@ -465,15 +613,15 @@ class XMLAssembler:
                     '      <content>'
                 ])
                 
-                # Handle content with embedded MathML
+                # Handle content with embedded MathML and XML table elements
                 content = section.get('content', '')
-                if '<math xmlns="http://www.w3.org/1998/Math/MathML"' in content:
-                    # Split content around MathML and handle each part
+                if '<math xmlns="http://www.w3.org/1998/Math/MathML"' in content or '<ap:table xmlns:ap="http://example.com/academic-paper"' in content:
+                    # Split content around MathML and XML tables
                     import re
-                    parts = re.split(r'(<math xmlns="http://www\.w3\.org/1998/Math/MathML".*?</math>)', content)
+                    parts = re.split(r'(<math xmlns="http://www\.w3\.org/1998/Math/MathML".*?</math>|<ap:table xmlns:ap="http://example\.com/academic-paper".*?</ap:table>)', content, flags=re.DOTALL)
                     for part in parts:
-                        if part.startswith('<math xmlns="http://www.w3.org/1998/Math/MathML"'):
-                            # This is MathML - don't escape it
+                        if part.startswith('<math xmlns="http://www.w3.org/1998/Math/MathML"') or part.startswith('<ap:table xmlns:ap="http://example.com/academic-paper"'):
+                            # This is MathML or XML table - don't escape it
                             xml_lines.append(f'        {part}')
                         elif part.strip():
                             # This is text - escape it
@@ -530,9 +678,11 @@ class XMLAssembler:
                 xml_lines.append('    </reference>')
             xml_lines.append('  </references>')
         
+        # Tables are now inline in content, no separate section needed
+        
         # Other elements
         for element_type, items in elements.items():
-            if items and element_type not in ['inline_math', 'citations']:
+            if items and element_type not in ['inline_math', 'citations', 'tables']:
                 xml_lines.append(f'  <{element_type}>')
                 for item in items:
                     xml_lines.extend([
@@ -597,7 +747,7 @@ class HybridLatexToXmlConverter:
         # Phase 2: Content cleaning with inline equations
         print("🧹 Phase 2: Cleaning content + inline equations (pylatexenc)...")
         clean_metadata = self.cleaner.clean_metadata(metadata)
-        clean_sections = self.cleaner.clean_sections_with_inline_equations(sections, equations, citations, references)
+        clean_sections = self.cleaner.clean_sections_with_inline_equations(sections, equations, citations, references, elements['tables'])
         
         # Phase 3: XML assembly
         print("📄 Phase 3: Assembling XML with inline MathML...")

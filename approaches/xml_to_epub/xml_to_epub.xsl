@@ -213,11 +213,16 @@
   <xsl:template match="ap:table">
     <div class="table" id="{@id}">
       <table>
-        <caption><xsl:value-of select="ap:caption"/></caption>
+        <caption style="font-style: italic;"><xsl:value-of select="ap:caption"/></caption>
         <thead>
           <tr>
             <xsl:for-each select="ap:headers/ap:header">
-              <th><xsl:value-of select="."/></th>
+              <th>
+                <xsl:if test="@colspan">
+                  <xsl:attribute name="colspan"><xsl:value-of select="@colspan"/></xsl:attribute>
+                </xsl:if>
+                <xsl:value-of select="."/>
+              </th>
             </xsl:for-each>
           </tr>
         </thead>
@@ -225,7 +230,12 @@
           <xsl:for-each select="ap:rows/ap:row">
             <tr>
               <xsl:for-each select="ap:cell">
-                <td><xsl:value-of select="."/></td>
+                <td>
+                  <xsl:if test="@colspan">
+                    <xsl:attribute name="colspan"><xsl:value-of select="@colspan"/></xsl:attribute>
+                  </xsl:if>
+                  <xsl:value-of select="."/>
+                </td>
               </xsl:for-each>
             </tr>
           </xsl:for-each>
