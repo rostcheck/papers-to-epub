@@ -50,10 +50,37 @@ class RulesBasedConverter:
         # Expand input files
         expanded_content = re.sub(r'\\input\{([^}]+)\}', replace_input, content)
         
+        # Handle external bibliography files
+        expanded_content = self._expand_bibliography(expanded_content, base_dir)
+        
         # Filter LaTeX comments (but preserve escaped % characters)
         filtered_content = self._filter_latex_comments(expanded_content)
         
         return filtered_content
+    
+    def _expand_bibliography(self, content: str, base_dir: Path) -> str:
+        """Expand external bibliography files (.bbl)"""
+        def replace_bibliography(match):
+            bib_name = match.group(1)
+            bbl_path = base_dir / f"{bib_name}.bbl"
+            
+            if bbl_path.exists():
+                try:
+                    bbl_content = bbl_path.read_text(encoding='utf-8')
+                    # Extract just the bibliography content, not the wrapper
+                    bib_match = re.search(r'\\begin\{thebibliography\}.*?\\end\{thebibliography\}', 
+                                        bbl_content, re.DOTALL)
+                    if bib_match:
+                        return bib_match.group(0)
+                    else:
+                        return bbl_content
+                except Exception:
+                    pass
+            
+            return match.group(0)  # Keep original if file not found or error
+        
+        # Replace \bibliography{filename} with content from filename.bbl
+        return re.sub(r'\\bibliography\{([^}]+)\}', replace_bibliography, content)
     
     def _filter_latex_comments(self, content: str) -> str:
         """Remove LaTeX comments while preserving escaped % characters"""
@@ -101,8 +128,14 @@ class RulesBasedConverter:
     def extract_mathematics(self) -> Dict[str, Any]:
         """Extract equations and mathematical content"""
         equations = self._extract_equations()
+        inline_math = self._extract_inline_math()
         self.extraction_stats['equations'] = len(equations)
-        return {'equations': equations}
+        self.extraction_stats['inline_math'] = len(inline_math)
+        return {'equations': equations, 'inline_math': inline_math}
+    
+    def _extract_inline_math(self) -> List[str]:
+        """Extract inline math expressions"""
+        return re.findall(r'\$([^$]+)\$', self.latex_content)
     
     def extract_references(self) -> Dict[str, Any]:
         """Extract bibliography and citations"""
@@ -248,19 +281,22 @@ class RulesBasedConverter:
         
         # Extract equation environments
         eq_patterns = [
-            r'\\begin\{equation\}(.*?)\\end\{equation\}',
-            r'\\begin\{align\}(.*?)\\end\{align\}',
-            r'\\begin\{eqnarray\}(.*?)\\end\{eqnarray\}',
-            r'\$\$(.*?)\$\$'
+            (r'\\begin\{equation\}(.*?)\\end\{equation\}', 'equation'),
+            (r'\\begin\{align\}(.*?)\\end\{align\}', 'align'),
+            (r'\\begin\{eqnarray\}(.*?)\\end\{eqnarray\}', 'eqnarray'),
+            (r'\\\\\[(.*?)\\\\\]', 'display'),  # \[ ... \]
+            (r'\$\$(.*?)\$\$', 'display')  # $$ ... $$
         ]
         
-        for pattern in eq_patterns:
+        for pattern, eq_type in eq_patterns:
             matches = re.finditer(pattern, self.latex_content, re.DOTALL)
             for match in matches:
-                equations.append({
-                    'content': match.group(1).strip(),
-                    'type': 'display'
-                })
+                content = match.group(1).strip()
+                if content:  # Only add non-empty equations
+                    equations.append({
+                        'content': content,
+                        'type': eq_type
+                    })
         
         return equations
     
@@ -268,8 +304,9 @@ class RulesBasedConverter:
         """Extract bibliography entries"""
         bibliography = []
         
-        # Extract bibitem entries
-        bibitem_pattern = r'\\bibitem\{([^}]+)\}(.*?)(?=\\bibitem|\\end\{thebibliography\}|$)'
+        # Extract bibitem entries (handles both simple and complex formats)
+        # Pattern handles: \bibitem{key} and \bibitem[citation]{key}
+        bibitem_pattern = r'\\bibitem(?:\[[^\]]*\])?\{([^}]+)\}(.*?)(?=\\bibitem|\\end\{thebibliography\}|$)'
         matches = re.finditer(bibitem_pattern, self.latex_content, re.DOTALL)
         
         for match in matches:
@@ -394,60 +431,69 @@ class RulesBasedConverter:
             self._add_content_with_citations(content_elem, section['content'])
     
     def _add_content_with_citations(self, parent_elem: ET.Element, text: str) -> None:
-        """Add content with embedded citation elements"""
+        """Add content with embedded citation elements and inline math"""
         p_elem = ET.SubElement(parent_elem, 'p')
         p_elem.set('xmlns', 'http://www.w3.org/1999/xhtml')
         
-        # Find all citation patterns and their positions
+        # Convert inline math and citations together
+        processed_text = self._process_text_content(text)
+        
+        # Parse the processed content and add to paragraph
+        self._add_processed_content(p_elem, processed_text)
+    
+    def _process_text_content(self, text: str) -> str:
+        """Process text to convert inline math and mark citations"""
+        # First convert inline math to placeholder format
+        def replace_math(match):
+            math_content = match.group(1).replace('\\\\', '\\')
+            return f'<MATH>{math_content}</MATH>'
+        
+        # Convert $...$ to placeholders
+        text_with_math = re.sub(r'\$([^$]+)\$', replace_math, text)
+        
+        # Mark citations for processing
+        def replace_citation(match):
+            cite_keys = match.group(1).split(',')
+            citations = ''.join(f'<CITE>{key.strip()}</CITE>' for key in cite_keys)
+            return citations
+        
+        # Convert citations to placeholders
         citation_pattern = r'\\cite(?:p)?\{([^}]+)\}'
-        matches = list(re.finditer(citation_pattern, text))
+        processed_text = re.sub(citation_pattern, replace_citation, text_with_math)
         
-        if not matches:
-            # No citations, just add text
-            p_elem.text = text
-            return
+        return processed_text
+    
+    def _add_processed_content(self, parent_elem: ET.Element, content: str) -> None:
+        """Add processed content with math and citation elements"""
+        # Split content by placeholders and add elements
+        parts = re.split(r'(<MATH>.*?</MATH>|<CITE>.*?</CITE>)', content)
         
-        # Build content with citations
-        last_end = 0
-        
-        for match in matches:
-            # Add text before citation
-            before_text = text[last_end:match.start()]
-            if before_text:
-                if p_elem.text is None:
-                    p_elem.text = before_text
+        for part in parts:
+            if part.startswith('<MATH>') and part.endswith('</MATH>'):
+                # Add MathML element
+                math_content = part[6:-7]  # Remove <MATH> tags
+                math_elem = ET.SubElement(parent_elem, 'math')
+                math_elem.set('xmlns', 'http://www.w3.org/1998/Math/MathML')
+                mi_elem = ET.SubElement(math_elem, 'mi')
+                mi_elem.text = math_content
+            elif part.startswith('<CITE>') and part.endswith('</CITE>'):
+                # Add citation element
+                cite_key = part[6:-7]  # Remove <CITE> tags
+                citation_elem = ET.SubElement(parent_elem, 'citation')
+                citation_elem.text = cite_key
+            elif part:
+                # Add text content
+                if parent_elem.text is None:
+                    parent_elem.text = part
                 else:
                     # Add to tail of last element
-                    if len(p_elem) > 0:
-                        if p_elem[-1].tail is None:
-                            p_elem[-1].tail = before_text
+                    if len(parent_elem) > 0:
+                        if parent_elem[-1].tail is None:
+                            parent_elem[-1].tail = part
                         else:
-                            p_elem[-1].tail += before_text
+                            parent_elem[-1].tail += part
                     else:
-                        p_elem.text += before_text
-            
-            # Add citation elements
-            cite_keys = match.group(1).split(',')
-            for key in cite_keys:
-                key = key.strip()
-                citation_elem = ET.SubElement(p_elem, 'citation')
-                citation_elem.text = key
-            
-            last_end = match.end()
-        
-        # Add remaining text after last citation
-        remaining_text = text[last_end:]
-        if remaining_text:
-            if len(p_elem) > 0:
-                if p_elem[-1].tail is None:
-                    p_elem[-1].tail = remaining_text
-                else:
-                    p_elem[-1].tail += remaining_text
-            else:
-                if p_elem.text is None:
-                    p_elem.text = remaining_text
-                else:
-                    p_elem.text += remaining_text
+                        parent_elem.text += part
 
     
     def _add_references_to_xml(self, root: ET.Element, references: Dict[str, Any]) -> None:

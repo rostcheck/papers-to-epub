@@ -57,10 +57,37 @@ class StructuralReviewer:
         # Expand input files
         expanded_content = re.sub(r'\\input\{([^}]+)\}', replace_input, content)
         
+        # Handle external bibliography files
+        expanded_content = self._expand_bibliography(expanded_content, base_dir)
+        
         # Filter LaTeX comments (but preserve escaped % characters)
         filtered_content = self._filter_latex_comments(expanded_content)
         
         return filtered_content
+    
+    def _expand_bibliography(self, content: str, base_dir: Path) -> str:
+        """Expand external bibliography files (.bbl)"""
+        def replace_bibliography(match):
+            bib_name = match.group(1)
+            bbl_path = base_dir / f"{bib_name}.bbl"
+            
+            if bbl_path.exists():
+                try:
+                    bbl_content = bbl_path.read_text(encoding='utf-8')
+                    # Extract just the bibliography content, not the wrapper
+                    bib_match = re.search(r'\\begin\{thebibliography\}.*?\\end\{thebibliography\}', 
+                                        bbl_content, re.DOTALL)
+                    if bib_match:
+                        return bib_match.group(0)
+                    else:
+                        return bbl_content
+                except Exception:
+                    pass
+            
+            return match.group(0)  # Keep original if file not found or error
+        
+        # Replace \bibliography{filename} with content from filename.bbl
+        return re.sub(r'\\bibliography\{([^}]+)\}', replace_bibliography, content)
     
     def _filter_latex_comments(self, content: str) -> str:
         """Remove LaTeX comments while preserving escaped % characters"""
@@ -149,6 +176,7 @@ class StructuralReviewer:
         
         # XML math
         xml_equations = self._extract_xml_equations()
+        xml_inline_math = self._extract_xml_inline_math()
         
         return {
             'equations': {
@@ -157,9 +185,20 @@ class StructuralReviewer:
                 'match_ratio': min(len(xml_equations), len(latex_equations)) / max(len(latex_equations), 1)
             },
             'inline_math': {
-                'latex': len(latex_inline_math)
+                'latex': len(latex_inline_math),
+                'xml': len(xml_inline_math),
+                'match_ratio': min(len(xml_inline_math), len(latex_inline_math)) / max(len(latex_inline_math), 1)
             }
         }
+    
+    def _extract_xml_inline_math(self) -> List[ET.Element]:
+        """Extract inline math (MathML) elements from XML"""
+        math_elements = []
+        # Find all math elements in any namespace
+        for elem in self.xml_root.iter():
+            if elem.tag.endswith('}math') or elem.tag == 'math':
+                math_elements.append(elem)
+        return math_elements
     
     def collect_references_metrics(self) -> Dict[str, Any]:
         """Collect references and citations metrics"""
@@ -224,7 +263,10 @@ class StructuralReviewer:
                 metadata['abstract']['match_ratio'] * 0.3
             ),
             'structure': structure['sections']['match_ratio'],
-            'mathematics': mathematics['equations']['match_ratio'],
+            'mathematics': (
+                mathematics['equations']['match_ratio'] * 0.5 +
+                mathematics['inline_math']['match_ratio'] * 0.5
+            ),
             'references': (
                 references['citations']['match_ratio'] * 0.6 +
                 references['bibliography']['match_ratio'] * 0.4
@@ -398,7 +440,7 @@ class StructuralReviewer:
         mathematics = report['detailed_metrics']['mathematics']
         lines.append("=== MATHEMATICAL CONTENT ANALYSIS ===")
         lines.append(f"✓ Display equations: LaTeX={mathematics['equations']['latex']} | XML={mathematics['equations']['xml']}")
-        lines.append(f"✓ Inline math: LaTeX={mathematics['inline_math']['latex']}")
+        lines.append(f"✓ Inline math: LaTeX={mathematics['inline_math']['latex']} | XML={mathematics['inline_math']['xml']}")
         lines.append("")
         
         # References section
@@ -475,7 +517,8 @@ class StructuralReviewer:
         return citations
     
     def _extract_latex_bibliography(self) -> List[str]:
-        bibitem_pattern = r'\\bibitem\{([^}]+)\}'
+        # Extract bibitem entries (handles both simple and complex formats)
+        bibitem_pattern = r'\\bibitem(?:\[[^\]]*\])?\{([^}]+)\}'
         return re.findall(bibitem_pattern, self.latex_content)
     
     def _extract_latex_tables(self) -> List[str]:
