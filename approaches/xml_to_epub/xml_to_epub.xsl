@@ -58,14 +58,6 @@
           </div>
         </xsl:if>
 
-        <!-- Equations -->
-        <xsl:if test="ap:equations/ap:equation">
-          <div class="equations">
-            <h2>Equations</h2>
-            <xsl:apply-templates select="ap:equations/ap:equation"/>
-          </div>
-        </xsl:if>
-
         <!-- References -->
         <xsl:if test="ap:references/ap:reference">
           <div class="references">
@@ -191,6 +183,11 @@
       </xsl:if>
       <xsl:apply-templates/>
     </span>
+  </xsl:template>
+
+  <!-- MathML in default namespace (from inline content) -->
+  <xsl:template match="*[local-name()='math' and namespace-uri()='http://www.w3.org/1998/Math/MathML']">
+    <xsl:copy-of select="."/>
   </xsl:template>
 
   <xsl:template match="mathml:mi">
