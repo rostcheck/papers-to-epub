@@ -350,15 +350,15 @@ body {
 
 .section-title {
     color: #2c3e50;
-    border-bottom: 2px solid #3498db;
-    padding-bottom: 0.5em;
+    font-weight: bold;
+    font-size: 1.3em;
     margin: 2em 0 1em 0;
 }
 
 .subsection-title {
     color: #34495e;
-    border-bottom: 1px solid #bdc3c7;
-    padding-bottom: 0.3em;
+    font-weight: bold;
+    font-size: 1.1em;
     margin: 1.5em 0 0.5em 0;
 }
 
