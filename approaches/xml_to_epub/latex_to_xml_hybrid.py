@@ -19,6 +19,79 @@ import latex2mathml.converter
 sys.path.append(str(Path(__file__).parent / "structural_review"))
 from review_structure import StructuralReviewer
 
+class BedrockClient:
+    """Clean Bedrock client with caching and Converse API"""
+    
+    def __init__(self):
+        self.client = None
+        
+    def _get_client(self):
+        if not self.client:
+            import boto3
+            self.client = boto3.client('bedrock-runtime', region_name='us-east-1')
+        return self.client
+    
+    def call_llm(self, prompt: str, input_text: str, model_id: str = 'anthropic.claude-3-sonnet-20240229-v1:0') -> str:
+        """Call Bedrock LLM with automatic caching"""
+        import json
+        import hashlib
+        import os
+        from pathlib import Path
+        
+        # Create cache key from model + prompt + input
+        cache_content = f"{model_id}:{prompt}:{input_text}"
+        cache_key = hashlib.md5(cache_content.encode()).hexdigest()
+        cache_file = Path("output") / f"bedrock_cache_{cache_key}.json"
+        
+        # Check cache first
+        if cache_file.exists():
+            try:
+                with open(cache_file, 'r') as f:
+                    cached_result = json.load(f)
+                print(f"   💾 Using cached result")
+                return cached_result['response']
+            except:
+                pass
+        
+        # Make API call using Converse API
+        try:
+            client = self._get_client()
+            
+            response = client.converse(
+                modelId=model_id,
+                messages=[{
+                    'role': 'user',
+                    'content': [{'text': f"{prompt}\n\n{input_text}"}]
+                }],
+                inferenceConfig={'maxTokens': 2000}
+            )
+            
+            result_text = response['output']['message']['content'][0]['text'].strip()
+            
+            # Cache the result
+            try:
+                os.makedirs("output", exist_ok=True)
+                cache_data = {
+                    'model_id': model_id,
+                    'prompt': prompt,
+                    'input': input_text,
+                    'response': result_text
+                }
+                with open(cache_file, 'w') as f:
+                    json.dump(cache_data, f, indent=2)
+                print(f"   ✅ Result cached")
+            except Exception as e:
+                print(f"   ⚠️ Cache write failed: {e}")
+            
+            return result_text
+            
+        except Exception as e:
+            print(f"   ❌ Bedrock call failed: {e}")
+            return None
+
+# Global Bedrock client instance
+bedrock_client = BedrockClient()
+
 class StructuralExtractor:
     """Phase 1: Extract document structure using TexSoup"""
     
@@ -26,6 +99,7 @@ class StructuralExtractor:
         self.soup = TexSoup(latex_content)
         self.latex_content = latex_content
         self.bedrock = boto3.client('bedrock-runtime', region_name='us-east-1')
+        self.label_to_number = {}  # Maps LaTeX labels to table numbers
     
     def extract_metadata(self) -> Dict[str, str]:
         """Extract title, authors, abstract using LLM for complex parsing"""
@@ -240,21 +314,81 @@ Return ONLY the JSON array. Make sure to extract ALL authors mentioned."""
         }
     
     def _parse_latex_tables(self) -> List[Dict]:
-        """Parse LaTeX tables using Bedrock AI for all tables"""
+        """Parse LaTeX tables with label extraction and sequential numbering"""
         tables = []
         
+        prompt = """Parse this LaTeX table into structured JSON format. Extract the caption, headers, and data rows.
+
+Return ONLY a JSON object with this structure:
+{
+    "caption": "table caption text (clean, no LaTeX commands)",
+    "headers": ["header1", "header2", "header3"],
+    "rows": [
+        ["cell1", "cell2", "cell3"],
+        ["cell4", "cell5", "cell6"]
+    ]
+}
+
+Rules:
+- Clean all LaTeX commands from text
+- Handle multicolumn by repeating headers as needed
+- Convert \\% to %
+- Return valid JSON only, no explanation"""
+        
         for i, table in enumerate(self.soup.find_all('table')):
+            table_number = i + 1
             table_content = str(table)
+            table_id = f"table_{table_number}"
             
-            # Use Bedrock for all tables
-            print(f"   🧠 Using Bedrock AI for table {i+1}...")
-            bedrock_result = self._parse_table_with_bedrock(table_content, f"table_{i+1}")
-            if bedrock_result:
-                tables.append(bedrock_result)
+            # Extract label from table content using pylatexenc
+            label = self._extract_label_from_table(table_content)
+            if label:
+                self.label_to_number[label] = table_number
+            
+            print(f"   🧠 Using Bedrock AI for table {table_number}...")
+            
+            result_text = bedrock_client.call_llm(prompt, table_content)
+            if result_text:
+                try:
+                    import json
+                    table_data = json.loads(result_text)
+                    
+                    # Convert to our format with number and label
+                    headers = [{'content': h, 'colspan': 1} for h in table_data.get('headers', [])]
+                    rows = [[{'content': cell, 'colspan': 1} for cell in row] for row in table_data.get('rows', [])]
+                    
+                    tables.append({
+                        'id': table_id,
+                        'number': table_number,
+                        'label': label,
+                        'caption': table_data.get('caption', f'Table {table_number}'),
+                        'headers': headers,
+                        'rows': rows,
+                        'content': table_content
+                    })
+                except Exception as e:
+                    print(f"   ⚠️ JSON parsing failed for table {table_number}: {e}")
             else:
-                print(f"   ⚠️ Bedrock failed, skipping table {i+1}")
+                print(f"   ⚠️ Bedrock failed, skipping table {table_number}")
         
         return tables
+    
+    def _extract_label_from_table(self, table_content: str) -> str:
+        """Extract \\label{name} from table content using regex"""
+        import re
+        
+        # Simple regex to find \label{name}
+        match = re.search(r'\\label\{([^}]+)\}', table_content)
+        if match:
+            return match.group(1)
+        return None
+    
+    def extract_all_elements(self) -> Dict:
+        """Extract all document elements with proper reference mapping"""
+        # Use existing method but add label mapping
+        elements = self.extract_structured_elements()
+        elements['label_mapping'] = self.label_to_number
+        return elements
     
     def _parse_table_with_bedrock(self, table_content: str, table_id: str) -> Dict:
         """Use Bedrock to parse table structure with disk cache"""
@@ -469,7 +603,7 @@ class ContentCleaner:
     def clean_sections_with_inline_equations(self, sections: List[Dict[str, str]], equations: List[Dict[str, str]], citations: List[Dict[str, str]], references: List[Dict[str, str]], tables: List[Dict]) -> List[Dict[str, str]]:
         """Clean LaTeX commands from sections and embed MathML equations inline"""
         cleaned = []
-        for section in sections:
+        for i, section in enumerate(sections):
             cleaned_section = section.copy()
             if section.get('title'):
                 cleaned_section['title'] = self.cleaner.latex_to_text(section['title'])
@@ -550,7 +684,14 @@ class ContentCleaner:
     
     def _generate_table_xml(self, table: Dict) -> str:
         """Generate XML table element from structured table data"""
-        xml_lines = [f'<ap:table xmlns:ap="http://example.com/academic-paper" id="{table["id"]}">']
+        xml_lines = [f'<ap:table xmlns:ap="http://example.com/academic-paper" id="{table["id"]}"']
+        
+        if table.get('label'):
+            xml_lines[0] += f' label="{table["label"]}"'
+        xml_lines[0] += '>'
+        
+        if table.get('number'):
+            xml_lines.append(f'  <ap:number>{table["number"]}</ap:number>')
         
         if table.get('caption'):
             xml_lines.append(f'  <ap:caption>{self._escape_xml(table["caption"])}</ap:caption>')
@@ -580,6 +721,62 @@ class ContentCleaner:
         
         xml_lines.append('</ap:table>')
         return '\n'.join(xml_lines)
+    
+    def process_table_references(self, content: str, label_mapping: Dict[str, int]) -> str:
+        """Replace Table~\\ref{label} patterns with proper Table numbers"""
+        from pylatexenc.latexwalker import LatexWalker, LatexMacroNode
+        
+        try:
+            walker = LatexWalker(content)
+            nodes, _, _ = walker.get_latex_nodes()
+            
+            # Build replacement map
+            replacements = []
+            
+            def collect_refs(node_list):
+                for node in node_list:
+                    if isinstance(node, LatexMacroNode) and node.macroname == 'ref':
+                        if node.nodeargd and node.nodeargd.argnlist:
+                            label = node.nodeargd.argnlist[0].latex_verbatim().strip('{}')
+                            if label in label_mapping:
+                                # Check if preceded by "Table~" or "Tables~" pattern
+                                start_pos = node.pos
+                                end_pos = node.pos + node.len
+                                
+                                # Look backwards for "Table~" or "Tables~" pattern
+                                prefix_start = max(0, start_pos - 12)
+                                prefix = content[prefix_start:start_pos]
+                                
+                                if prefix.endswith('Table~'):
+                                    # Replace "Table~\ref{label}" with "Table N"
+                                    actual_start = start_pos - 6  # len("Table~")
+                                    replacement = f"Table {label_mapping[label]}"
+                                    replacements.append((actual_start, end_pos, replacement))
+                                elif prefix.endswith('Tables~'):
+                                    # Replace "Tables~\ref{label}" with "Table N" (keep singular in replacement)
+                                    actual_start = start_pos - 7  # len("Tables~")
+                                    replacement = f"Table {label_mapping[label]}"
+                                    replacements.append((actual_start, end_pos, replacement))
+                                else:
+                                    # Just replace \ref{label} with Table N
+                                    replacement = f"Table {label_mapping[label]}"
+                                    replacements.append((start_pos, end_pos, replacement))
+                    
+                    # Recursively check child nodes
+                    if hasattr(node, 'nodelist') and node.nodelist:
+                        collect_refs(node.nodelist)
+            
+            collect_refs(nodes)
+            
+            # Apply replacements in reverse order to maintain positions
+            for start_pos, end_pos, replacement in reversed(replacements):
+                content = content[:start_pos] + replacement + content[end_pos:]
+            
+            return content
+            
+        except Exception as e:
+            print(f"   ⚠️ LaTeX parsing failed: {e}")
+            return content
     
     def _parse_table_with_bedrock(self, table_content: str, table_id: str) -> Dict:
         """Experimental: Use Bedrock to parse table structure"""
@@ -884,7 +1081,7 @@ class XMLAssembler:
         
         # Other elements
         for element_type, items in elements.items():
-            if items and element_type not in ['inline_math', 'citations', 'tables']:
+            if items and element_type not in ['inline_math', 'citations', 'tables', 'label_mapping']:
                 xml_lines.append(f'  <{element_type}>')
                 for item in items:
                     xml_lines.extend([
@@ -941,14 +1138,42 @@ class HybridLatexToXmlConverter:
         bibliography_block = self.extractor.extract_bibliography_block()
         equations = self.extractor.extract_equations()
         citations = self.extractor.extract_citations()
-        elements = self.extractor.extract_structured_elements()
+        elements = self.extractor.extract_all_elements()
         
         # Process bibliography (structural data extraction)
         references = self.processor.process_bibliography(bibliography_block)
         
-        # Phase 2: Content cleaning with inline equations
-        print("🧹 Phase 2: Cleaning content + inline equations (pylatexenc)...")
+        # Phase 2: Content cleaning with inline equations and table references
+        print("🧹 Phase 2: Cleaning content + inline equations + table references...")
         clean_metadata = self.cleaner.clean_metadata(metadata)
+        
+        # Process table references in sections before other cleaning
+        import re
+        print(f"   🔍 Processing {len(sections)} sections for table references...")
+        for i, section in enumerate(sections):
+            if section.get('content') and 'ref{tab1}' in section['content']:
+                print(f"   📍 FOUND tab1 in Section {i}")
+                before_refs = section['content'].count('\\ref{')
+                
+                section['content'] = self.cleaner.process_table_references(
+                    section['content'], 
+                    elements.get('label_mapping', {})
+                )
+                
+                after_refs = section['content'].count('\\ref{')
+                print(f"   📊 Section {i}: {before_refs} refs -> {after_refs} refs")
+                
+                if 'Table 1' in section['content']:
+                    print(f"   ✅ Section {i}: Successfully created 'Table 1'")
+                if '\\ref{tab1}' in section['content']:
+                    print(f"   ❌ Section {i}: Still contains \\ref{{tab1}}")
+                    
+            elif section.get('content'):
+                section['content'] = self.cleaner.process_table_references(
+                    section['content'], 
+                    elements.get('label_mapping', {})
+                )
+        
         clean_sections = self.cleaner.clean_sections_with_inline_equations(sections, equations, citations, references, elements['tables'])
         
         # Phase 3: XML assembly
