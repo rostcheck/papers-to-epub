@@ -212,8 +212,13 @@
   <!-- Tables -->
   <xsl:template match="ap:table">
     <div class="table" id="{@id}">
+      <h4 class="table-title">
+        <strong>Table <xsl:value-of select="ap:number"/></strong>
+      </h4>
+      <p class="table-caption" style="font-style: italic;">
+        <xsl:value-of select="ap:caption"/>
+      </p>
       <table>
-        <caption style="font-style: italic;"><xsl:value-of select="ap:caption"/></caption>
         <thead>
           <tr>
             <xsl:for-each select="ap:headers/ap:header">

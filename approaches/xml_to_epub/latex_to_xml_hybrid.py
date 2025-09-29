@@ -347,7 +347,11 @@ Rules:
             
             print(f"   🧠 Using Bedrock AI for table {table_number}...")
             
-            result_text = bedrock_client.call_llm(prompt, table_content)
+            # Pre-process table content to resolve references
+            cleaner = ContentCleaner()
+            processed_content = cleaner.process_table_references(table_content, self.label_to_number)
+            
+            result_text = bedrock_client.call_llm(prompt, processed_content)
             if result_text:
                 try:
                     import json
@@ -398,8 +402,11 @@ Rules:
         import os
         from pathlib import Path
         
-        # Create cache key from prompt + content
-        cache_key = hashlib.md5(f"table_parse_{table_content}".encode()).hexdigest()
+        # Pre-process table content to resolve references
+        processed_content = self.process_table_references(table_content, self.label_to_number)
+        
+        # Create cache key from prompt + processed content
+        cache_key = hashlib.md5(f"table_parse_{processed_content}".encode()).hexdigest()
         cache_file = Path("output") / f"bedrock_cache_{cache_key}.json"
         
         # Check cache first
@@ -1151,8 +1158,7 @@ class HybridLatexToXmlConverter:
         import re
         print(f"   🔍 Processing {len(sections)} sections for table references...")
         for i, section in enumerate(sections):
-            if section.get('content') and 'ref{tab1}' in section['content']:
-                print(f"   📍 FOUND tab1 in Section {i}")
+            if section.get('content') and '\\ref{' in section['content']:
                 before_refs = section['content'].count('\\ref{')
                 
                 section['content'] = self.cleaner.process_table_references(
@@ -1161,7 +1167,8 @@ class HybridLatexToXmlConverter:
                 )
                 
                 after_refs = section['content'].count('\\ref{')
-                print(f"   📊 Section {i}: {before_refs} refs -> {after_refs} refs")
+                if before_refs != after_refs:
+                    print(f"   📊 Section {i}: {before_refs} refs -> {after_refs} refs")
                 
                 if 'Table 1' in section['content']:
                     print(f"   ✅ Section {i}: Successfully created 'Table 1'")
