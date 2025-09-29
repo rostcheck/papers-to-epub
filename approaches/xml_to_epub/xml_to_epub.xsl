@@ -50,14 +50,6 @@
           </div>
         </xsl:if>
 
-        <!-- Figures -->
-        <xsl:if test="ap:figures/ap:figure">
-          <div class="figures">
-            <h2>Figures</h2>
-            <xsl:apply-templates select="ap:figures/ap:figure"/>
-          </div>
-        </xsl:if>
-
         <!-- References -->
         <xsl:if test="ap:references/ap:reference">
           <div class="references">
@@ -264,6 +256,18 @@
         <figcaption><xsl:value-of select="ap:caption"/></figcaption>
       </figure>
     </div>
+  </xsl:template>
+
+  <!-- Inline Figures (with namespace) -->
+  <xsl:template match="ap:figure[@class='inline-figure']">
+    <div class="figure" id="{@id}" style="border: 1px solid #ccc; padding: 1em; margin: 1em 0; text-align: center; background: #f9f9f9;">
+      <img src="{ap:img/@src}" alt="{ap:img/@alt}" class="{ap:img/@class}"/>
+      <figcaption><xsl:value-of select="ap:figcaption"/></figcaption>
+    </div>
+  </xsl:template>
+  
+  <xsl:template match="figure[@class='inline-figure']//div[@class='figure-placeholder']">
+    <xsl:apply-templates/>
   </xsl:template>
 
   <!-- Equations -->

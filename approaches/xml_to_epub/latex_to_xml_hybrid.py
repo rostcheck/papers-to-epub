@@ -4,18 +4,20 @@ Hybrid LaTeX to XML Converter
 Architecture: TexSoup (structure) + pylatexenc (content) + LLM (unstructured) + MathML
 """
 
-import re
 import json
-import boto3
+import re
 import sys
 from pathlib import Path
-from typing import Dict, List, Any, Optional
+from typing import Any, Dict, List, Optional
 
-from TexSoup import TexSoup
-from pylatexenc.latex2text import LatexNodes2Text
+import boto3
 import latex2mathml.converter
+from pdf2image import convert_from_path
+from PIL import Image
+from pylatexenc.latex2text import LatexNodes2Text
+from TexSoup import TexSoup
 
-# Import existing quality assessment component
+# Add structural_review to path
 sys.path.append(str(Path(__file__).parent / "structural_review"))
 from review_structure import StructuralReviewer
 
@@ -376,6 +378,165 @@ Rules:
                 print(f"   ⚠️ Bedrock failed, skipping table {table_number}")
         
         return tables
+    
+    def process_figures_inline(self, sections: List[Dict], figures: List[Dict]) -> None:
+        """Process figures inline in sections and convert PDF to PNG."""
+        for figure in figures:
+            # Extract figure metadata using TexSoup
+            figure_data = self._extract_figure_data_with_texsoup(figure)
+            
+            # Convert referenced image to PNG if needed
+            if figure_data.get('image_file'):
+                png_path = self._convert_figure_image(figure_data['image_file'])
+                if png_path:
+                    figure_data['png_path'] = png_path
+            
+            # Insert figure XML into appropriate section
+            if figure_data.get('label'):
+                figure_xml = self._generate_figure_xml(figure_data)
+                self._insert_figure_in_sections(sections, figure_data, figure_xml)
+    
+    def _extract_figure_data_with_texsoup(self, figure: Dict) -> Dict:
+        """Extract figure metadata using TexSoup parsing."""
+        content = figure.get('content', '')
+        
+        try:
+            # Parse the figure content with TexSoup
+            figure_soup = TexSoup(content)
+            
+            # Extract caption using TexSoup
+            caption_node = figure_soup.find('caption')
+            caption = str(caption_node.contents[0]) if caption_node and caption_node.contents else None
+            
+            # Extract label using TexSoup - strip braces
+            label_node = figure_soup.find('label')
+            label = None
+            if label_node and label_node.args:
+                label_raw = str(label_node.args[0])
+                label = label_raw.strip('{}')  # Remove braces
+            
+            # Extract image file - handle both includegraphics and epsfig
+            image_file = None
+            
+            # Try includegraphics first
+            includegraphics_node = figure_soup.find('includegraphics')
+            if includegraphics_node and includegraphics_node.args:
+                image_file = str(includegraphics_node.args[-1])
+            
+            # Try epsfig if includegraphics not found
+            if not image_file:
+                epsfig_node = figure_soup.find('epsfig')
+                if epsfig_node and epsfig_node.args:
+                    # epsfig uses figure=filename format
+                    for arg in epsfig_node.args:
+                        arg_str = str(arg)
+                        if 'figure=' in arg_str:
+                            image_file = arg_str.split('figure=')[1].split(',')[0]
+                            break
+            
+            return {
+                'id': figure.get('id', 'figure_1'),
+                'caption': caption,
+                'label': label,
+                'image_file': image_file,
+                'number': 1
+            }
+            
+        except Exception as e:
+            print(f"   ⚠️ TexSoup parsing failed for figure: {e}")
+            return {'id': figure.get('id', 'figure_1')}
+    
+    def _convert_figure_image(self, image_file: str) -> Optional[str]:
+        """Convert figure image to PNG format suitable for ePub."""
+        if not image_file:
+            return None
+            
+        base_path = Path('/home/aiuser/workspace/LaTeX')
+        # PIL can handle these formats directly
+        possible_extensions = ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff']
+        
+        source_path = None
+        for ext in possible_extensions:
+            candidate = base_path / f"{image_file}{ext}"
+            if candidate.exists():
+                source_path = candidate
+                break
+        
+        # Check for PDF and convert using pdf2image
+        pdf_candidate = base_path / f"{image_file}.pdf"
+        if pdf_candidate.exists() and not source_path:
+            try:
+                output_name = f"{Path(image_file).stem}.png"
+                output_path = Path(output_name)
+                
+                if output_path.exists():
+                    return output_name
+                
+                # Convert first page of PDF to PNG
+                pages = convert_from_path(pdf_candidate, first_page=1, last_page=1)
+                if pages:
+                    pages[0].save(str(output_path), 'PNG')
+                    print(f"   🖼️ Converted {pdf_candidate.name} to PNG")
+                    return output_name
+                    
+            except Exception as e:
+                print(f"   ⚠️ PDF conversion failed: {e}")
+                return None
+        
+        if not source_path:
+            print(f"   ⚠️ Figure image not found: {image_file}")
+            return None
+        
+        output_name = f"{Path(image_file).stem}.png"
+        output_path = Path(output_name)
+        
+        if output_path.exists():
+            return output_name
+        
+        try:
+            img = Image.open(source_path)
+            # Convert to RGB if necessary (for formats like RGBA)
+            if img.mode in ('RGBA', 'LA', 'P'):
+                img = img.convert('RGB')
+            img.save(str(output_path), 'PNG')
+            print(f"   🖼️ Converted {source_path.name} to PNG")
+            return output_name
+        except Exception as e:
+            print(f"   ⚠️ Image conversion failed: {e}")
+            return None
+    
+    def _generate_figure_xml(self, figure_data: Dict) -> str:
+        """Generate XML for inline figure."""
+        png_path = figure_data.get('png_path', 'missing.png')
+        alt_text = f"Figure {figure_data.get('number', 1)}"
+        caption = figure_data.get('caption', 'Figure')
+        figure_id = figure_data.get('id', 'figure_1')
+        
+        return f'''
+        <figure id="{figure_id}" class="inline-figure">
+          <img src="{png_path}" alt="{alt_text}" class="figure-image"/>
+          <figcaption>Figure {figure_data.get('number', 1)}: {caption}</figcaption>
+        </figure>'''
+    
+    def _insert_figure_in_sections(self, sections: List[Dict], figure_data: Dict, figure_xml: str) -> None:
+        """Insert figure XML into appropriate section using proper reference processing."""
+        label = figure_data.get('label')
+        if not label:
+            return
+            
+        # Use existing reference processing infrastructure
+        cleaner = ContentCleaner()
+        label_mapping = {label: figure_data.get('number', 1)}
+        
+        for section in sections:
+            content = section.get('content', '')
+            if f'\\ref{{{label}}}' in content:
+                # Use the existing reference processor
+                processed_content = cleaner.process_table_references(content, label_mapping)
+                processed_content += figure_xml
+                section['content'] = processed_content
+                print(f"   🖼️ Inserted figure {figure_data.get('number', 1)} inline in section")
+                break
     
     def _extract_label_from_table(self, table_content: str) -> str:
         """Extract \\label{name} from table content using regex"""
@@ -785,6 +946,53 @@ class ContentCleaner:
             print(f"   ⚠️ LaTeX parsing failed: {e}")
             return content
     
+    def process_figure_references(self, content: str, label_mapping: Dict[str, int]) -> str:
+        """Replace Figure~\\ref{label} patterns with proper Figure numbers"""
+        from pylatexenc.latexwalker import LatexWalker, LatexMacroNode
+        
+        try:
+            walker = LatexWalker(content)
+            nodes, _, _ = walker.get_latex_nodes()
+            
+            # Build replacement map
+            replacements = []
+            
+            def collect_refs(node_list):
+                for node in node_list:
+                    if isinstance(node, LatexMacroNode) and node.macroname == 'ref':
+                        if node.nodeargd and node.nodeargd.argnlist:
+                            label = node.nodeargd.argnlist[0].latex_verbatim().strip('{}')
+                            if label in label_mapping:
+                                # Check if preceded by "Figure~" pattern
+                                start_pos = node.pos
+                                end_pos = node.pos + node.len
+                                
+                                # Look backwards for "Figure~" pattern
+                                prefix_start = max(0, start_pos - 8)
+                                prefix = content[prefix_start:start_pos]
+                                
+                                if prefix.endswith('Figure~'):
+                                    # Replace "Figure~\ref{label}" with "Figure N"
+                                    actual_start = start_pos - 7  # len("Figure~")
+                                    replacement = f"Figure {label_mapping[label]}"
+                                    replacements.append((actual_start, end_pos, replacement))
+                    
+                    # Recursively check child nodes
+                    if hasattr(node, 'nodelist') and node.nodelist:
+                        collect_refs(node.nodelist)
+            
+            collect_refs(nodes)
+            
+            # Apply replacements in reverse order to maintain positions
+            for start_pos, end_pos, replacement in reversed(replacements):
+                content = content[:start_pos] + replacement + content[end_pos:]
+            
+            return content
+            
+        except Exception as e:
+            print(f"   ⚠️ LaTeX parsing failed: {e}")
+            return content
+    
     def _parse_table_with_bedrock(self, table_content: str, table_id: str) -> Dict:
         """Experimental: Use Bedrock to parse table structure"""
         import json
@@ -897,6 +1105,7 @@ Rules:
                 .replace('>', '&gt;')
                 .replace('"', '&quot;')
                 .replace("'", '&#39;'))
+    
     def _tables_match(self, table_text: str, parsed_table: Dict) -> bool:
         """Check if LaTeX table text matches parsed table using key patterns"""
         caption = parsed_table.get('caption', '')
@@ -1021,13 +1230,13 @@ class XMLAssembler:
                 
                 # Handle content with embedded MathML and XML table elements
                 content = section.get('content', '')
-                if '<math xmlns="http://www.w3.org/1998/Math/MathML"' in content or '<ap:table xmlns:ap="http://example.com/academic-paper"' in content:
-                    # Split content around MathML and XML tables
+                if '<math xmlns="http://www.w3.org/1998/Math/MathML"' in content or '<ap:table xmlns:ap="http://example.com/academic-paper"' in content or '<figure id=' in content:
+                    # Split content around MathML, XML tables, and figures
                     import re
-                    parts = re.split(r'(<math xmlns="http://www\.w3\.org/1998/Math/MathML".*?</math>|<ap:table xmlns:ap="http://example\.com/academic-paper".*?</ap:table>)', content, flags=re.DOTALL)
+                    parts = re.split(r'(<math xmlns="http://www\.w3\.org/1998/Math/MathML".*?</math>|<ap:table xmlns:ap="http://example\.com/academic-paper".*?</ap:table>|<figure id=.*?</figure>)', content, flags=re.DOTALL)
                     for part in parts:
-                        if part.startswith('<math xmlns="http://www.w3.org/1998/Math/MathML"') or part.startswith('<ap:table xmlns:ap="http://example.com/academic-paper"'):
-                            # This is MathML or XML table - don't escape it
+                        if part.startswith('<math xmlns="http://www.w3.org/1998/Math/MathML"') or part.startswith('<ap:table xmlns:ap="http://example.com/academic-paper"') or part.startswith('<figure id='):
+                            # This is MathML, XML table, or figure - don't escape it
                             xml_lines.append(f'        {part}')
                         elif part.strip():
                             # This is text - escape it
@@ -1154,17 +1363,71 @@ class HybridLatexToXmlConverter:
         print("🧹 Phase 2: Cleaning content + inline equations + table references...")
         clean_metadata = self.cleaner.clean_metadata(metadata)
         
-        # Process table references in sections before other cleaning
-        import re
-        print(f"   🔍 Processing {len(sections)} sections for table references...")
+        # Process table and figure references in sections before other cleaning
+        print(f"   🔍 Processing {len(sections)} sections for table and figure references...")
+        
+        # Build figure label mapping using proper TexSoup parsing
+        figure_mapping = {}
+        figure_xmls = {}
+        for i, figure in enumerate(elements.get('figures', []), 1):
+            figure_data = self.extractor._extract_figure_data_with_texsoup(figure)
+            label = figure_data.get('label')
+            if label:
+                figure_mapping[label] = i
+                
+                # Generate figure XML using extracted data
+                caption = figure_data.get('caption', f'Figure {i}')
+                image_file = figure_data.get('image_file')
+                
+                if image_file:
+                    # Convert image if needed
+                    png_path = self.extractor._convert_figure_image(image_file)
+                    if png_path:
+                        figure_xmls[label] = f'''
+        <figure id="figure_{i}" class="inline-figure">
+          <img src="{png_path}" alt="Figure {i}" class="figure-image"/>
+          <figcaption>Figure {i}: {caption}</figcaption>
+        </figure>'''
+                    else:
+                        figure_xmls[label] = f'''
+        <figure id="figure_{i}" class="inline-figure">
+          <div class="figure-placeholder">
+            <strong>Figure {i}</strong>
+            <p>{caption}</p>
+            <em>(Image conversion not available)</em>
+          </div>
+        </figure>'''
+                else:
+                    figure_xmls[label] = f'''
+        <figure id="figure_{i}" class="inline-figure">
+          <div class="figure-placeholder">
+            <strong>Figure {i}</strong>
+            <p>{caption}</p>
+          </div>
+        </figure>'''
+        
+        # Combine table and figure mappings
+        all_references = {**elements.get('label_mapping', {}), **figure_mapping}
+        
         for i, section in enumerate(sections):
             if section.get('content') and '\\ref{' in section['content']:
                 before_refs = section['content'].count('\\ref{')
                 
+                # Process references
                 section['content'] = self.cleaner.process_table_references(
                     section['content'], 
                     elements.get('label_mapping', {})
                 )
+                section['content'] = self.cleaner.process_figure_references(
+                    section['content'], 
+                    figure_mapping
+                )
+                
+                # Insert figure XML if this section has figure references
+                for label, figure_xml in figure_xmls.items():
+                    if f'Figure {figure_mapping[label]}' in section['content']:
+                        section['content'] += figure_xml
+                        print(f"   🖼️ Inserted Figure {figure_mapping[label]} inline in section {i}")
                 
                 after_refs = section['content'].count('\\ref{')
                 if before_refs != after_refs:
@@ -1172,13 +1435,17 @@ class HybridLatexToXmlConverter:
                 
                 if 'Table 1' in section['content']:
                     print(f"   ✅ Section {i}: Successfully created 'Table 1'")
-                if '\\ref{tab1}' in section['content']:
-                    print(f"   ❌ Section {i}: Still contains \\ref{{tab1}}")
+                if 'Figure 1' in section['content']:
+                    print(f"   ✅ Section {i}: Successfully created 'Figure 1'")
                     
             elif section.get('content'):
                 section['content'] = self.cleaner.process_table_references(
                     section['content'], 
                     elements.get('label_mapping', {})
+                )
+                section['content'] = self.cleaner.process_figure_references(
+                    section['content'], 
+                    figure_mapping
                 )
         
         clean_sections = self.cleaner.clean_sections_with_inline_equations(sections, equations, citations, references, elements['tables'])
