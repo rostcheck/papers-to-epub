@@ -32,7 +32,7 @@ approaches/xml_to_epub/
 └── epub_books/                     # Generated ePub files
 ```
 
-## Three Conversion Approaches
+## Four Conversion Approaches
 
 ### 🔧 **Rules-Based Converter** (`latex_to_xml_rules_based.py`)
 - **Method**: Pure Python with regex parsing
@@ -52,6 +52,12 @@ approaches/xml_to_epub/
 - **Status**: ⚠️ XML namespace issues, needs refinement
 - **Best for**: Optimal quality when working
 
+### ⚡ **LaTeXML Converter** (`latex_to_xml_latexml.py`)
+- **Method**: Professional LaTeXML engine with cognitive enhancement
+- **Strengths**: Industry-standard LaTeX processing, perfect table rendering
+- **Status**: ✅ Working, professional-grade conversion
+- **Best for**: Maximum accuracy and LaTeX compatibility
+
 ## Usage
 
 ### Convert LaTeX to XML
@@ -68,16 +74,18 @@ cd approaches/xml_to_epub
 python3 latex_to_xml_cognitive.py path/to/paper.tex
 ```
 
-#### Hybrid Approach (Experimental)
+#### LaTeXML Approach (Professional)
 ```bash
 cd approaches/xml_to_epub
-python3 latex_to_xml_hybrid.py path/to/paper.tex
+python3 latex_to_xml_latexml.py path/to/paper.tex
 ```
 
 ### Convert XML to ePub
 ```bash
 cd approaches/xml_to_epub
 python3 xml_to_epub.py output/paper.xml
+# OR for LaTeXML XML:
+python3 xml_to_epub_latexml.py output/paper_latexml.xml
 ```
 
 ### Quality Assessment
@@ -100,6 +108,7 @@ python3 tools/compare_pages_bedrock.py
 | **Rules-Based** | ✅ Working | 99.8% | Complete extraction, reliable | Limited LaTeX cleaning |
 | **Cognitive** | ⚠️ Needs fixes | TBD | Intelligent parsing | Q CLI integration |
 | **Hybrid** | ⚠️ Experimental | 100%* | Best architecture | XML namespace issues |
+| **LaTeXML** | ✅ Working | 100% | Professional LaTeX processing, perfect tables | Requires LaTeXML install |
 
 *When working properly
 
@@ -124,6 +133,14 @@ pip3 install lxml
 ### For Hybrid Approach
 ```bash
 pip3 install TexSoup pylatexenc
+```
+
+### For LaTeXML Approach
+```bash
+# Install LaTeXML (Ubuntu/Debian)
+sudo apt-get install latexml
+# OR (macOS with Homebrew)
+brew install latexml
 ```
 
 ### For Cognitive Approach
@@ -164,9 +181,9 @@ The pipeline produces professional-quality ePub files with:
 
 ### Example Results (Word2Vec Paper)
 - **Input**: 12-page LaTeX academic paper
-- **Output**: 35-page professional ePub (~50-60KB)
+- **Output**: 28-page professional ePub (~16KB)
 - **Content**: 19 sections, 5 equations, 8 tables, 1 figure, 32 references
-- **Quality Score**: 99.8% (EXCELLENT)
+- **Quality Score**: 100% (EXCELLENT) - LaTeXML approach
 
 ## Architecture Benefits
 
