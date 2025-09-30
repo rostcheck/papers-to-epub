@@ -372,16 +372,17 @@
 
   <!-- Math elements -->
   <xsl:template match="ltx:Math">
-    <span class="math">
-      <xsl:choose>
-        <xsl:when test="@tex">
-          <xsl:value-of select="@tex"/>
-        </xsl:when>
-        <xsl:otherwise>
-          <xsl:apply-templates/>
-        </xsl:otherwise>
-      </xsl:choose>
-    </span>
+    <xsl:choose>
+      <xsl:when test="m:math">
+        <xsl:copy-of select="m:math"/>
+      </xsl:when>
+      <xsl:when test="@tex">
+        <span class="math"><xsl:value-of select="@tex"/></span>
+      </xsl:when>
+      <xsl:otherwise>
+        <span class="math"><xsl:apply-templates/></span>
+      </xsl:otherwise>
+    </xsl:choose>
   </xsl:template>
 
   <!-- Graphics -->
