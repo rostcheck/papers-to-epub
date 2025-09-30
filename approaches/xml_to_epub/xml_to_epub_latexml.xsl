@@ -45,6 +45,31 @@
           h2 { font-size: 1.4em; border-bottom: 2px solid #333; padding-bottom: 0.3em; }
           h3 { font-size: 1.2em; }
           
+          .document-header {
+            text-align: center;
+            margin-bottom: 3em;
+            border-bottom: 2px solid #333;
+            padding-bottom: 2em;
+          }
+          
+          .document-title {
+            font-size: 2em;
+            font-weight: bold;
+            margin-bottom: 1em;
+            color: #2c3e50;
+          }
+          
+          .document-authors {
+            font-size: 1em;
+            color: #666;
+            font-style: italic;
+          }
+          
+          .author {
+            margin-bottom: 1em;
+            text-align: center;
+          }
+          
           .section-title { 
             font-size: 1.3em; 
             font-weight: bold; 
@@ -179,6 +204,23 @@
         </style>
       </head>
       <body>
+        <!-- Document title and authors -->
+        <div class="document-header">
+          <h1 class="document-title"><xsl:value-of select="//ltx:title[1]"/></h1>
+          <xsl:if test="//ltx:creator[@role='author']">
+            <div class="document-authors">
+              <xsl:for-each select="//ltx:creator[@role='author']">
+                <div class="author">
+                  <xsl:apply-templates select="ltx:personname"/>
+                </div>
+                <xsl:if test="position() != last()">
+                  <br/>
+                </xsl:if>
+              </xsl:for-each>
+            </div>
+          </xsl:if>
+        </div>
+        
         <xsl:apply-templates select="//ltx:document"/>
       </body>
     </html>
@@ -265,6 +307,16 @@
         </div>
       </xsl:if>
     </div>
+  </xsl:template>
+
+  <!-- Personname template for authors -->
+  <xsl:template match="ltx:personname">
+    <xsl:apply-templates/>
+  </xsl:template>
+  
+  <!-- Break elements in personname -->
+  <xsl:template match="ltx:personname/ltx:break">
+    <br/>
   </xsl:template>
 
   <!-- Figures -->

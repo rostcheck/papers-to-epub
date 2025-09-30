@@ -27,7 +27,7 @@ class BedrockClient:
             self.client = boto3.client('bedrock-runtime', region_name='us-east-1')
         return self.client
     
-    def call_llm(self, prompt: str, input_text: str, model_id: str = 'anthropic.claude-3-sonnet-20240229-v1:0') -> str:
+    def call_llm(self, prompt: str, input_text: str, model_id: str = 'us.anthropic.claude-sonnet-4-20250514-v1:0') -> str:
         """Call Bedrock LLM with automatic caching"""
         # Create cache key from model + prompt + input
         cache_content = f"{model_id}:{prompt}:{input_text}"
@@ -157,6 +157,9 @@ class LaTeXMLConverter:
             # Extract statistics first
             self._extract_stats(root)
             
+            # Fix authors (clean up messy personname content)
+            self._fix_authors_cognitively(root)
+            
             # Fix references (convert LABEL:xxx to proper text)
             self._fix_references_cognitively(root)
             
@@ -173,6 +176,82 @@ class LaTeXMLConverter:
             
         except Exception as e:
             print(f"   ⚠️ Cognitive enhancement failed: {e}")
+    
+    def _fix_authors_cognitively(self, root):
+        """Clean up messy author information using Bedrock"""
+        ns = {'ltx': 'http://dlmf.nist.gov/LaTeXML'}
+        creators = root.xpath('//ltx:creator[@role="author"]', namespaces=ns)
+        
+        for creator in creators:
+            personname = creator.find('.//ltx:personname', namespaces=ns)
+            if personname is not None:
+                # Get the messy content
+                messy_content = etree.tostring(personname, encoding='unicode', method='xml')
+                
+                prompt = '''Parse this messy author information from LaTeX/XML and extract clean author names with their institutions and emails.
+The ERROR elements with \\And and \\AND are author separators.
+Return only clean XML with separate creator elements for each author.
+
+Return format: <creators><creator><name>First Last</name><institution>Institution Name</institution><email>email@domain.com</email></creator></creators>'''
+                
+                try:
+                    result = self.bedrock.call_llm(prompt, messy_content, 'us.anthropic.claude-sonnet-4-20250514-v1:0')
+                    
+                    # Parse the result and create separate creator elements
+                    if '<creators>' in result and '</creators>' in result:
+                        try:
+                            from xml.etree import ElementTree as ET
+                            # Extract the creators XML
+                            creators_xml = result[result.find('<creators>'):result.find('</creators>') + 11]
+                            creators_root = ET.fromstring(creators_xml)
+                            
+                            # Get the parent of the current creator element
+                            parent = creator.getparent()
+                            creator_index = list(parent).index(creator)
+                            
+                            # Remove the original creator
+                            parent.remove(creator)
+                            
+                            # Add new creator elements for each author
+                            for i, author_elem in enumerate(creators_root.findall('creator')):
+                                new_creator = etree.Element('{http://dlmf.nist.gov/LaTeXML}creator')
+                                new_creator.set('role', 'author')
+                                
+                                new_personname = etree.SubElement(new_creator, '{http://dlmf.nist.gov/LaTeXML}personname')
+                                
+                                # Add name
+                                name = author_elem.find('name')
+                                if name is not None:
+                                    new_personname.text = name.text
+                                
+                                # Add institution
+                                institution = author_elem.find('institution')
+                                if institution is not None:
+                                    br1 = etree.SubElement(new_personname, '{http://dlmf.nist.gov/LaTeXML}break')
+                                    br1.tail = institution.text
+                                
+                                # Add email
+                                email = author_elem.find('email')
+                                if email is not None:
+                                    br2 = etree.SubElement(new_personname, '{http://dlmf.nist.gov/LaTeXML}break')
+                                    email_elem = etree.SubElement(new_personname, '{http://dlmf.nist.gov/LaTeXML}text')
+                                    email_elem.set('font', 'typewriter')
+                                    email_elem.text = email.text
+                                
+                                # Insert the new creator at the correct position
+                                parent.insert(creator_index + i, new_creator)
+                            
+                            print(f"   ✅ Created separate creator elements for each author")
+                            
+                        except Exception as parse_error:
+                            print(f"   ⚠️ XML parsing failed: {parse_error}")
+                            # Keep original if parsing fails
+                    
+                    else:
+                        print(f"   ⚠️ No valid XML structure in result")
+                        
+                except Exception as e:
+                    print(f"   ⚠️ Author cleaning failed: {e}")
     
     def _fix_references_cognitively(self, root):
         """Fix cross-references using LaTeXML's label system"""
