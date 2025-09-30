@@ -81,8 +81,26 @@ class LaTeXMLToEpubConverter:
     def _create_epub_package(self, html_content: str):
         """Create ePub package with the transformed HTML"""
         
-        # Extract title from HTML
-        title = self._extract_title_from_html(html_content)
+        # Extract title and authors from XML
+        tree = etree.parse(str(self.xml_file))
+        root = tree.getroot()
+        ns = {'ltx': 'http://dlmf.nist.gov/LaTeXML'}
+        
+        # Extract title
+        title_elem = root.find('.//ltx:title', namespaces=ns)
+        title = title_elem.text if title_elem is not None else "Academic Paper"
+        
+        # Extract authors
+        creators = root.xpath('//ltx:creator[@role="author"]', namespaces=ns)
+        authors = []
+        for creator in creators:
+            personname = creator.find('.//ltx:personname', namespaces=ns)
+            if personname is not None and personname.text:
+                # Extract just the name (first line before any break)
+                name = personname.text.strip()
+                authors.append(name)
+        
+        author_string = ", ".join(authors) if authors else "Academic Paper"
         
         # Create ePub structure
         with zipfile.ZipFile(self.epub_file, 'w', zipfile.ZIP_DEFLATED) as epub:
@@ -104,7 +122,7 @@ class LaTeXMLToEpubConverter:
 <package xmlns="http://www.idpf.org/2007/opf" version="2.0" unique-identifier="bookid">
   <metadata xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf">
     <dc:title>{title}</dc:title>
-    <dc:creator>Academic Paper</dc:creator>
+    <dc:creator>{author_string}</dc:creator>
     <dc:identifier id="bookid">urn:uuid:academic-paper-{self.xml_file.stem}</dc:identifier>
     <dc:language>en</dc:language>
     <meta name="cover" content="cover"/>
