@@ -15,8 +15,11 @@ approaches/xml_to_epub/
 ├── latex_to_xml_rules_based.py     # Heuristic regex-based LaTeX parsing
 ├── latex_to_xml_cognitive.py       # Q Developer CLI-based conversion
 ├── latex_to_xml_hybrid.py          # TexSoup + pylatexenc + LLM approach
+├── latex_to_xml_latexml.py         # LaTeXML professional conversion
 ├── xml_to_epub.py                  # XSLT-based XML to ePub converter
 ├── xml_to_epub.xsl                 # XSLT stylesheet for transformation
+├── xml_to_epub_latexml.py          # LaTeXML XML to ePub converter
+├── xml_to_epub_latexml.xsl         # LaTeXML XSLT stylesheet
 ├── academic_paper_schema.xsd       # XML schema definition
 ├── structural_review/
 │   └── review_structure.py         # Quality assessment tool

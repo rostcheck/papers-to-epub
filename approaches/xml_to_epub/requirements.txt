@@ -1,0 +1,7 @@
+lxml
+TexSoup
+pylatexenc
+pdf2image
+boto3
+latex2mathml
+pillow
