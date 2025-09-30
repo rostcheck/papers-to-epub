@@ -198,6 +198,26 @@
             margin-bottom: 2em;
           }
           
+          .bibliography {
+            margin-top: 3em;
+            page-break-before: always;
+          }
+          
+          .bibitem {
+            margin-bottom: 1em;
+            padding-left: 2em;
+            text-indent: -2em;
+          }
+          
+          .bib-number {
+            font-weight: bold;
+            margin-right: 0.5em;
+          }
+          
+          .bib-content {
+            line-height: 1.4;
+          }
+          
           .para {
             margin-bottom: 1em;
           }
@@ -228,7 +248,7 @@
 
   <!-- Document -->
   <xsl:template match="ltx:document">
-    <xsl:apply-templates select="ltx:section | ltx:subsection"/>
+    <xsl:apply-templates select="ltx:section | ltx:subsection | ltx:bibliography"/>
   </xsl:template>
 
   <!-- Sections -->
@@ -451,7 +471,30 @@
 
   <!-- Citations -->
   <xsl:template match="ltx:cite">
-    <span class="citation">[<xsl:apply-templates/>]</span>
+    <span class="citation"><xsl:apply-templates/></span>
+  </xsl:template>
+
+  <!-- Bibliography -->
+  <xsl:template match="ltx:bibliography">
+    <div class="bibliography">
+      <h2 class="section-title"><xsl:value-of select="ltx:title"/></h2>
+      <xsl:apply-templates select="ltx:biblist"/>
+    </div>
+  </xsl:template>
+  
+  <!-- Bibliography list -->
+  <xsl:template match="ltx:biblist">
+    <div class="biblist">
+      <xsl:apply-templates select="ltx:bibitem"/>
+    </div>
+  </xsl:template>
+  
+  <!-- Bibliography item -->
+  <xsl:template match="ltx:bibitem">
+    <div class="bibitem" id="{@xml:id}">
+      <span class="bib-number"><xsl:value-of select="ltx:tags/ltx:tag[1]"/></span>
+      <span class="bib-content"><xsl:value-of select="ltx:bibblock"/></span>
+    </div>
   </xsl:template>
 
   <!-- LaTeXML tag elements -->

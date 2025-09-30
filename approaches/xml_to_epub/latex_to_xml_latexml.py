@@ -128,6 +128,9 @@ class LaTeXMLConverter:
                 print(f"   STDERR: {result.stderr}")
                 return False
             
+            # Process citations while bibref elements still exist
+            self._process_citations_early()
+            
             # Step 2: latexmlpost for MathML
             print(f"   Converting math to MathML...")
             post_cmd = ['latexmlpost', '--pmml', '--dest', str(self.xml_file), str(self.xml_file)]
@@ -146,6 +149,112 @@ class LaTeXMLConverter:
         except Exception as e:
             print(f"   ❌ LaTeXML error: {e}")
             return False
+    
+    def _process_citations_early(self):
+        """Process citations while bibref elements still exist"""
+        try:
+            # Parse the XML
+            tree = etree.parse(str(self.xml_file))
+            root = tree.getroot()
+            ns = {'ltx': 'http://dlmf.nist.gov/LaTeXML'}
+            
+            # Extract bibliography from LaTeX source
+            bibliography = self._extract_bibliography_from_latex()
+            
+            # Find citations with bibref elements
+            citations = root.xpath('//ltx:cite', namespaces=ns)
+            
+            for cite in citations:
+                bibrefs = cite.xpath('.//ltx:bibref', namespaces=ns)
+                
+                if bibrefs:
+                    citation_parts = []
+                    for bibref in bibrefs:
+                        ref_keys = bibref.get('bibrefs', '').split(',')
+                        for ref_key in ref_keys:
+                            ref_key = ref_key.strip()
+                            if ref_key and ref_key in bibliography:
+                                entry = bibliography[ref_key]
+                                if entry.get('authors'):
+                                    first_author = entry['authors'][0].split()[-1]  # Last name
+                                    if first_author not in citation_parts:  # Avoid duplicates
+                                        citation_parts.append(first_author)
+                                else:
+                                    if ref_key not in citation_parts:
+                                        citation_parts.append(ref_key)
+                            elif ref_key:  # Only add non-empty keys
+                                if ref_key not in citation_parts:
+                                    citation_parts.append(ref_key)
+                    
+                    if citation_parts:
+                        # Replace citation content
+                        cite.clear()
+                        cite.text = f"[{', '.join(citation_parts)}]"
+                    else:
+                        # Remove empty citations
+                        parent = cite.getparent()
+                        if parent is not None:
+                            parent.remove(cite)
+            
+            # Add references section
+            self._add_references_section(root, bibliography, ns)
+            
+            # Save the updated XML
+            tree.write(str(self.xml_file), encoding='utf-8', pretty_print=True, xml_declaration=True)
+            print(f"   ✅ Early citation processing complete")
+            
+        except Exception as e:
+            print(f"   ⚠️ Early citation processing failed: {e}")
+    
+    def _add_references_section(self, root, bibliography, ns):
+        """Replace existing empty bibliography with populated entries"""
+        if not bibliography:
+            return
+        
+        # Find the first bibliography section (the empty one)
+        first_bib = root.find('.//ltx:bibliography[@xml:id="bib"]', namespaces=ns)
+        if first_bib is not None:
+            biblist = first_bib.find('.//ltx:biblist', namespaces=ns)
+            if biblist is not None:
+                # Clear and populate the first bibliography
+                biblist.clear()
+                
+                # Add each bibliography entry
+                for i, (key, entry) in enumerate(bibliography.items(), 1):
+                    bibitem = etree.SubElement(biblist, '{http://dlmf.nist.gov/LaTeXML}bibitem')
+                    bibitem.set('key', key)
+                    bibitem.set('xml:id', f'bib.{key}')
+                    
+                    # Add tags for numbering
+                    tags = etree.SubElement(bibitem, '{http://dlmf.nist.gov/LaTeXML}tags')
+                    tag = etree.SubElement(tags, '{http://dlmf.nist.gov/LaTeXML}tag')
+                    tag.text = f'[{i}]'
+                    
+                    # Add bibliographic data
+                    bibblock = etree.SubElement(bibitem, '{http://dlmf.nist.gov/LaTeXML}bibblock')
+                    
+                    # Format: Authors. Title. Year.
+                    ref_parts = []
+                    if entry.get('authors'):
+                        authors = ', '.join(entry['authors'])
+                        ref_parts.append(authors)
+                    
+                    if entry.get('title'):
+                        ref_parts.append(f'"{entry["title"]}"')
+                    
+                    if entry.get('year'):
+                        ref_parts.append(f'({entry["year"]})')
+                    
+                    bibblock.text = '. '.join(ref_parts) + '.'
+        
+        # Remove the second bibliography section (biba)
+        second_bib = root.find('.//ltx:bibliography[@xml:id="biba"]', namespaces=ns)
+        if second_bib is not None:
+            parent = second_bib.getparent()
+            if parent is not None:
+                parent.remove(second_bib)
+        
+        print(f"   ✅ Replaced bibliography section with {len(bibliography)} entries")
     
     def _cognitive_enhancement(self):
         """Cognitive enhancement of LaTeXML output - fix references and citations only"""
@@ -302,17 +411,108 @@ Return format: <creators><creator><name>First Last</name><institution>Institutio
                 print(f"     ⚠️ Unresolved: {labelref}")
     
     def _fix_citations_cognitively(self, root):
-        """Fix empty citations"""
+        """Fix empty citations using bibliography extraction"""
         ns = {'ltx': 'http://dlmf.nist.gov/LaTeXML'}
         citations = root.xpath('//ltx:cite', namespaces=ns)
         
         print(f"   📚 Fixing {len(citations)} citations...")
         
-        for i, cite in enumerate(citations):
-            # For now, just number them sequentially
-            # In a real implementation, you'd use Bedrock to resolve citation text
-            if not cite.text or cite.text.strip() == '':
-                cite.text = f"[{i+1}]"
+        # Extract bibliography from LaTeX source
+        bibliography = self._extract_bibliography_from_latex()
+        
+        for cite in citations:
+            # First try bibref elements (original LaTeXML format)
+            bibrefs = cite.xpath('.//ltx:bibref', namespaces=ns)
+            
+            if bibrefs:
+                # Use original bibref keys
+                citation_parts = []
+                for bibref in bibrefs:
+                    ref_keys = bibref.get('bibrefs', '').split(',')
+                    for ref_key in ref_keys:
+                        ref_key = ref_key.strip()
+                        if ref_key and ref_key in bibliography:
+                            entry = bibliography[ref_key]
+                            if entry.get('authors'):
+                                first_author = entry['authors'][0].split()[-1]  # Last name
+                                citation_parts.append(first_author)
+                            else:
+                                citation_parts.append(ref_key)
+                        else:
+                            citation_parts.append(ref_key or 'Unknown')
+                
+                if citation_parts:
+                    cite.clear()
+                    cite.text = f"[{', '.join(citation_parts)}]"
+                    continue
+            
+            # Fallback to ref elements (processed format)
+            refs = cite.xpath('.//ltx:ref', namespaces=ns)
+            if refs:
+                citation_parts = []
+                for ref in refs:
+                    ref_id = ref.get('idref', '')
+                    ref_key = ref_id.split('.')[-1] if '.' in ref_id else ref_id
+                    
+                    # Try to match by looking for the key in bibliography keys
+                    matched_key = None
+                    for bib_key in bibliography.keys():
+                        if ref_key in bib_key or bib_key in ref_key:
+                            matched_key = bib_key
+                            break
+                    
+                    if matched_key:
+                        entry = bibliography[matched_key]
+                        if entry.get('authors'):
+                            first_author = entry['authors'][0].split()[-1]
+                            citation_parts.append(first_author)
+                        else:
+                            citation_parts.append(matched_key)
+                    else:
+                        citation_parts.append(ref_key or 'Unknown')
+                
+                if citation_parts:
+                    cite.clear()
+                    cite.text = f"[{', '.join(citation_parts)}]"
+    
+    def _extract_bibliography_from_latex(self):
+        """Extract bibliography entries from LaTeX source using Bedrock"""
+        try:
+            # Read the LaTeX source
+            with open(self.latex_file, 'r', encoding='utf-8') as f:
+                latex_content = f.read()
+            
+            # Find bibliography section
+            bib_start = latex_content.find('\\begin{thebibliography}')
+            bib_end = latex_content.find('\\end{thebibliography}')
+            
+            if bib_start == -1 or bib_end == -1:
+                return {}
+            
+            bib_content = latex_content[bib_start:bib_end + len('\\end{thebibliography}')]
+            
+            prompt = '''Parse this LaTeX bibliography and extract citation information.
+Return JSON with citation keys as keys and objects with authors (array), title, year fields.
+
+Format: {"key1": {"authors": ["Author Name"], "title": "Title", "year": "2023"}}'''
+            
+            result = self.bedrock.call_llm(prompt, bib_content, 'us.anthropic.claude-sonnet-4-20250514-v1:0')
+            
+            # Parse JSON result
+            import json
+            if result.strip().startswith('{'):
+                return json.loads(result)
+            else:
+                # Extract JSON from response
+                import re
+                json_match = re.search(r'\{.*\}', result, re.DOTALL)
+                if json_match:
+                    return json.loads(json_match.group())
+            
+        except Exception as e:
+            print(f"   ⚠️ Bibliography extraction failed: {e}")
+        
+        return {}
     
     def _extract_stats(self, root):
         """Extract statistics from LaTeXML XML"""
