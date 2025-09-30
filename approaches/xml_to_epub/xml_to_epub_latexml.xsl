@@ -95,7 +95,8 @@
           
           .table-container {
             margin: 1.5em 0;
-            overflow-x: auto;
+            page-break-inside: avoid;
+            break-inside: avoid;
           }
           
           .table-caption {
@@ -108,34 +109,32 @@
           .table { 
             margin: 0 auto; 
             border-collapse: collapse; 
-            width: 100%; 
-            max-width: 100%;
+            width: 95%; 
+            max-width: 95%;
             background: white;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            border-radius: 6px;
-            overflow: hidden;
+            font-size: 0.85em;
+            page-break-inside: avoid;
+            break-inside: avoid;
           }
           
           .table th, .table td { 
-            border: 1px solid #dee2e6; 
-            padding: 0.75em 1em; 
+            border: 1px solid #ccc; 
+            padding: 0.4em 0.6em; 
             text-align: left; 
             vertical-align: top;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
           }
           
           .table th { 
-            background: linear-gradient(135deg, #495057 0%, #6c757d 100%); 
-            color: white;
+            background-color: #f5f5f5; 
+            color: #333;
             font-weight: bold; 
             text-align: center;
           }
           
           .table tr:nth-child(even) {
-            background-color: #f8f9fa;
-          }
-          
-          .table tr:hover {
-            background-color: #e9ecef;
+            background-color: #fafafa;
           }
           
           .figure { 
