@@ -261,7 +261,7 @@
       
       <xsl:if test="ltx:tags/ltx:tag[1]">
         <div class="equation-number">
-          (<xsl:value-of select="ltx:tags/ltx:tag[1]"/>)
+          <xsl:value-of select="ltx:tags/ltx:tag[1]"/>
         </div>
       </xsl:if>
     </div>
