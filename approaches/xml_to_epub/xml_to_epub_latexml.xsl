@@ -2,8 +2,9 @@
 <xsl:stylesheet version="1.0" 
                 xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
                 xmlns:ltx="http://dlmf.nist.gov/LaTeXML"
+                xmlns:m="http://www.w3.org/1998/Math/MathML"
                 xmlns="http://www.w3.org/1999/xhtml"
-                exclude-result-prefixes="ltx">
+                exclude-result-prefixes="ltx m">
 
   <xsl:output method="xml" encoding="UTF-8" indent="yes" 
               doctype-public="-//W3C//DTD XHTML 1.1//EN"
@@ -246,13 +247,14 @@
       
       <div class="equation-content">
         <xsl:choose>
-          <xsl:when test="ltx:Math">
-            <xsl:if test="ltx:Math/@tex">
-              <span class="math"><xsl:value-of select="ltx:Math/@tex"/></span>
-            </xsl:if>
+          <xsl:when test="ltx:Math/m:math">
+            <xsl:copy-of select="ltx:Math/m:math"/>
+          </xsl:when>
+          <xsl:when test="ltx:Math/@tex">
+            <span class="math"><xsl:value-of select="ltx:Math/@tex"/></span>
           </xsl:when>
           <xsl:otherwise>
-            <xsl:apply-templates select="text()"/>
+            <xsl:apply-templates select="ltx:Math"/>
           </xsl:otherwise>
         </xsl:choose>
       </div>

@@ -117,6 +117,7 @@ class LaTeXMLConverter:
     def _run_latexml(self) -> bool:
         """Run LaTeXML on the input file"""
         try:
+            # Step 1: latexml
             cmd = ['latexml', '--dest', str(self.xml_file), str(self.latex_file)]
             print(f"   Running: {' '.join(cmd)}")
             
@@ -127,17 +128,16 @@ class LaTeXMLConverter:
                 print(f"   STDERR: {result.stderr}")
                 return False
             
-            if result.stderr:
-                # LaTeXML warnings are normal, just show summary
-                lines = result.stderr.strip().split('\n')
-                summary_line = [line for line in lines if 'Conversion complete' in line]
-                if summary_line:
-                    print(f"   ✅ {summary_line[0]}")
-                else:
-                    print(f"   ✅ LaTeXML completed with warnings")
-            else:
-                print(f"   ✅ LaTeXML completed successfully")
+            # Step 2: latexmlpost for MathML
+            print(f"   Converting math to MathML...")
+            post_cmd = ['latexmlpost', '--pmml', '--dest', str(self.xml_file), str(self.xml_file)]
+            post_result = subprocess.run(post_cmd, capture_output=True, text=True, timeout=60)
             
+            if post_result.returncode != 0:
+                print(f"   ❌ MathML conversion failed: {post_result.stderr}")
+                return False
+            
+            print(f"   ✅ LaTeXML with MathML completed successfully")
             return True
             
         except subprocess.TimeoutExpired:
