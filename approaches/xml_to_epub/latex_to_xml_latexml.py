@@ -153,13 +153,16 @@ class LaTeXMLConverter:
     def _process_citations_early(self):
         """Process citations while bibref elements still exist"""
         try:
+            # Register xml namespace before parsing to handle xml:id attributes
+            etree.register_namespace('xml', 'http://www.w3.org/XML/1998/namespace')
+            
             # Parse the XML
             tree = etree.parse(str(self.xml_file))
             root = tree.getroot()
             ns = {'ltx': 'http://dlmf.nist.gov/LaTeXML'}
             
-            # Extract bibliography from LaTeX source
-            bibliography = self._extract_bibliography_from_latex()
+            # Skip LLM bibliography extraction - use LaTeXML's bibliography
+            # bibliography = self._extract_bibliography_from_latex()
             
             # Find citations with bibref elements
             citations = root.xpath('//ltx:cite', namespaces=ns)
@@ -173,21 +176,11 @@ class LaTeXMLConverter:
                         ref_keys = bibref.get('bibrefs', '').split(',')
                         for ref_key in ref_keys:
                             ref_key = ref_key.strip()
-                            if ref_key and ref_key in bibliography:
-                                entry = bibliography[ref_key]
-                                if entry.get('authors'):
-                                    first_author = entry['authors'][0].split()[-1]  # Last name
-                                    if first_author not in citation_parts:  # Avoid duplicates
-                                        citation_parts.append(first_author)
-                                else:
-                                    if ref_key not in citation_parts:
-                                        citation_parts.append(ref_key)
-                            elif ref_key:  # Only add non-empty keys
-                                if ref_key not in citation_parts:
-                                    citation_parts.append(ref_key)
+                            if ref_key and ref_key not in citation_parts:
+                                citation_parts.append(ref_key)
                     
                     if citation_parts:
-                        # Replace citation content
+                        # Replace citation content with meaningful keys
                         cite.clear()
                         cite.text = f"[{', '.join(citation_parts)}]"
                     else:
@@ -196,12 +189,20 @@ class LaTeXMLConverter:
                         if parent is not None:
                             parent.remove(cite)
             
-            # Add references section
-            self._add_references_section(root, bibliography, ns)
+            # Skip adding references section - use LaTeXML's existing bibliography
+            # self._add_references_section(root, bibliography, ns)
+            
+            # Remove the empty first bibliography, keep the populated second one
+            # Skip xml:id operations to avoid namespace errors
+            first_bib = root.find('.//ltx:bibliography', namespaces=ns)
+            if first_bib is not None and not first_bib.find('.//ltx:bibitem', namespaces=ns):
+                parent = first_bib.getparent()
+                if parent is not None:
+                    parent.remove(first_bib)
             
             # Save the updated XML
             tree.write(str(self.xml_file), encoding='utf-8', pretty_print=True, xml_declaration=True)
-            print(f"   ✅ Early citation processing complete")
+            print(f"   ✅ Early citation processing complete (using LaTeXML bibliography)")
             
         except Exception as e:
             print(f"   ⚠️ Early citation processing failed: {e}")
