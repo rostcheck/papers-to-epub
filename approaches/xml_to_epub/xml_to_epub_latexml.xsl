@@ -368,8 +368,8 @@
       
       <div class="figure-content">
         <xsl:choose>
-          <xsl:when test="ltx:graphics">
-            <xsl:apply-templates select="ltx:graphics"/>
+          <xsl:when test=".//ltx:graphics">
+            <xsl:apply-templates select=".//ltx:graphics"/>
           </xsl:when>
           <xsl:otherwise>
             <div class="graphics-placeholder">
@@ -479,9 +479,7 @@
 
   <!-- Graphics -->
   <xsl:template match="ltx:graphics">
-    <div class="graphics-placeholder">
-      [Figure: <xsl:value-of select="@graphic"/>]
-    </div>
+    <img src="{@graphic}.png" alt="Figure {@graphic}" class="figure-image"/>
   </xsl:template>
 
   <!-- Cross-references -->

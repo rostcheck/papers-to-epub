@@ -102,6 +102,9 @@ class LaTeXMLToEpubConverter:
         
         author_string = ", ".join(authors) if authors else "Academic Paper"
         
+        # Find image files referenced in the XML
+        image_files = self._find_image_files(root, ns)
+        
         # Create ePub structure
         with zipfile.ZipFile(self.epub_file, 'w', zipfile.ZIP_DEFLATED) as epub:
             
@@ -118,6 +121,11 @@ class LaTeXMLToEpubConverter:
             epub.writestr('META-INF/container.xml', container_xml)
             
             # content.opf (package document)
+            image_manifest = ""
+            for img_file in image_files:
+                img_id = Path(img_file).stem
+                image_manifest += f'    <item id="{img_id}" href="{img_file}" media-type="image/png"/>\n'
+            
             content_opf = f'''<?xml version="1.0" encoding="UTF-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" version="2.0" unique-identifier="bookid">
   <metadata xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf">
@@ -130,7 +138,7 @@ class LaTeXMLToEpubConverter:
   <manifest>
     <item id="content" href="content.html" media-type="application/xhtml+xml"/>
     <item id="toc" href="toc.ncx" media-type="application/x-dtbncx+xml"/>
-  </manifest>
+{image_manifest}  </manifest>
   <spine toc="toc">
     <itemref idref="content"/>
   </spine>
@@ -162,6 +170,27 @@ class LaTeXMLToEpubConverter:
             
             # content.html (main content)
             epub.writestr('content.html', html_content)
+            
+            # Add image files to ePub
+            for img_file in image_files:
+                img_path = Path("output") / img_file
+                if img_path.exists():
+                    with open(img_path, 'rb') as f:
+                        epub.writestr(img_file, f.read())
+                    print(f"   📷 Added image: {img_file}")
+    
+    def _find_image_files(self, root, ns):
+        """Find all image files referenced in the XML"""
+        image_files = []
+        graphics = root.xpath('.//ltx:graphics', namespaces=ns)
+        
+        for graphic in graphics:
+            graphic_name = graphic.get('graphic')
+            if graphic_name:
+                png_file = f"{graphic_name}.png"
+                image_files.append(png_file)
+        
+        return image_files
     
     def _extract_title_from_html(self, html_content: str) -> str:
         """Extract title from HTML content"""
