@@ -203,6 +203,21 @@
             page-break-before: always;
           }
           
+          .notes-section {
+            margin-top: 3em;
+            page-break-before: always;
+          }
+          
+          .note-item {
+            margin-bottom: 1em;
+            padding-left: 2em;
+            text-indent: -2em;
+          }
+          
+          .note-number {
+            font-weight: bold;
+          }
+          
           .bibitem {
             margin-bottom: 1em;
             padding-left: 2em;
@@ -248,7 +263,12 @@
 
   <!-- Document -->
   <xsl:template match="ltx:document">
-    <xsl:apply-templates select="ltx:section | ltx:subsection | ltx:bibliography"/>
+    <xsl:apply-templates select="ltx:section | ltx:subsection"/>
+    
+    <!-- Add notes section before bibliography -->
+    <xsl:call-template name="notes-section"/>
+    
+    <xsl:apply-templates select="ltx:bibliography"/>
   </xsl:template>
 
   <!-- Sections -->
@@ -466,7 +486,22 @@
 
   <!-- Cross-references -->
   <xsl:template match="ltx:ref">
-    <span class="ref">[<xsl:value-of select="@labelref"/>]</span>
+    <xsl:choose>
+      <!-- URL references - use href attribute -->
+      <xsl:when test="@class='ltx_url' and @href and @href!=''">
+        <a href="{@href}" class="url"><xsl:value-of select="@href"/></a>
+      </xsl:when>
+      <!-- Regular cross-references -->
+      <xsl:when test="@labelref and @labelref != ''">
+        <span class="ref">[<xsl:value-of select="@labelref"/>]</span>
+      </xsl:when>
+      <!-- Skip empty references -->
+    </xsl:choose>
+  </xsl:template>
+  
+  <!-- Footnotes -->
+  <xsl:template match="ltx:note[@role='footnote']">
+    <sup><a href="#{@xml:id}" class="footnote-ref"><xsl:value-of select="@mark"/></a></sup>
   </xsl:template>
 
   <!-- Citations -->
@@ -480,6 +515,25 @@
       <h2 class="section-title"><xsl:value-of select="ltx:title"/></h2>
       <xsl:apply-templates select="ltx:biblist"/>
     </div>
+  </xsl:template>
+  
+  <!-- Notes section (collect all footnotes) -->
+  <xsl:template name="notes-section">
+    <xsl:if test="//ltx:note[@role='footnote']">
+      <div class="notes-section">
+        <h2 class="section-title">Notes</h2>
+        <div class="notes-list">
+          <xsl:for-each select="//ltx:note[@role='footnote']">
+            <div class="note-item" id="{@xml:id}">
+              <span class="note-number"><xsl:value-of select="@mark"/>. </span>
+              <span class="note-content">
+                <xsl:apply-templates select="node()[not(self::ltx:tags)]"/>
+              </span>
+            </div>
+          </xsl:for-each>
+        </div>
+      </div>
+    </xsl:if>
   </xsl:template>
   
   <!-- Bibliography list -->
