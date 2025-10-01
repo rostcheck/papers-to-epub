@@ -491,7 +491,11 @@
       <xsl:when test="@class='ltx_url' and @href and @href!=''">
         <a href="{@href}" class="url"><xsl:value-of select="@href"/></a>
       </xsl:when>
-      <!-- Regular cross-references -->
+      <!-- Regular cross-references with text content -->
+      <xsl:when test="text() or ltx:text">
+        <span class="ref"><xsl:apply-templates/></span>
+      </xsl:when>
+      <!-- Fallback to labelref if no text content -->
       <xsl:when test="@labelref and @labelref != ''">
         <span class="ref">[<xsl:value-of select="@labelref"/>]</span>
       </xsl:when>

@@ -354,8 +354,8 @@ class LaTeXMLConverter:
             # Fix authors (clean up messy personname content)
             self._fix_authors_cognitively(root)
             
-            # Fix references (convert LABEL:xxx to proper text)
-            self._fix_references_cognitively(root)
+            # Skip reference fixing - LaTeXML already handles references correctly
+            # self._fix_references_cognitively(root)
             
             # Fix citations (convert empty citations to proper format)
             self._fix_citations_cognitively(root)
