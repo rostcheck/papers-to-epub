@@ -166,6 +166,7 @@ class LaTeXMLConverter:
             
             # Find citations with bibref elements
             citations = root.xpath('//ltx:cite', namespaces=ns)
+            used_citations = {}  # Track collisions: "Mikolov2013" -> count
             
             for cite in citations:
                 bibrefs = cite.xpath('.//ltx:bibref', namespaces=ns)
@@ -177,7 +178,17 @@ class LaTeXMLConverter:
                         for ref_key in ref_keys:
                             ref_key = ref_key.strip()
                             if ref_key and ref_key not in citation_parts:
-                                citation_parts.append(ref_key)
+                                # Extract author+year from LaTeXML bibliography
+                                bibitem = root.find(f'.//ltx:bibitem[@key="{ref_key}"]', namespaces=ns)
+                                if bibitem is not None:
+                                    bibblock = bibitem.find('.//ltx:bibblock', namespaces=ns)
+                                    if bibblock is not None and bibblock.text:
+                                        author_year = self._extract_author_year(bibblock.text, used_citations)
+                                        citation_parts.append(author_year)
+                                    else:
+                                        citation_parts.append(ref_key)
+                                else:
+                                    citation_parts.append(ref_key)
                     
                     if citation_parts:
                         # Replace citation content with meaningful keys
@@ -206,6 +217,39 @@ class LaTeXMLConverter:
             
         except Exception as e:
             print(f"   ⚠️ Early citation processing failed: {e}")
+    
+    def _extract_author_year(self, bibblock_text, used_citations):
+        """Extract author surname and year from bibliography text using Bedrock"""
+        try:
+            prompt = """Extract the first author's surname and publication year from this bibliography entry.
+Return only in format: AuthorYear (e.g., "Mikolov2013", "Bengio2003")
+If multiple years, use the first one. If no clear author/year, return "Unknown"."""
+            
+            result = self.bedrock.call_llm(prompt, bibblock_text.strip())
+            
+            if result and len(result.strip()) < 20 and result.strip().replace('Unknown', '').isalnum():
+                base_citation = result.strip()
+            else:
+                # Fallback to simple regex
+                import re
+                author_match = re.search(r'([A-Z][a-z]+)', bibblock_text)
+                year_match = re.search(r'\b(19|20)\d{2}\b', bibblock_text)
+                author = author_match.group(1) if author_match else "Unknown"
+                year = year_match.group(0) if year_match else ""
+                base_citation = f"{author}{year}"
+            
+            # Handle collisions
+            if base_citation in used_citations:
+                used_citations[base_citation] += 1
+                suffix = chr(ord('a') + used_citations[base_citation] - 1)
+                return f"{base_citation}{suffix}"
+            else:
+                used_citations[base_citation] = 1
+                return base_citation
+                
+        except Exception as e:
+            # Fallback to original key if Bedrock fails
+            return bibblock_text[:10] if bibblock_text else "Unknown"
     
     def _add_references_section(self, root, bibliography, ns):
         """Replace existing empty bibliography with populated entries"""
