@@ -226,6 +226,9 @@ class LaTeXMLConverter:
                 if parent is not None:
                     parent.remove(first_bib)
             
+            # Add author+year tags to bibliography entries for easy matching
+            self._add_author_year_tags(root, ref_key_to_citation, ns)
+            
             # Save the updated XML
             tree.write(str(self.xml_file), encoding='utf-8', pretty_print=True, xml_declaration=True)
             print(f"   ✅ Early citation processing complete (using LaTeXML bibliography)")
@@ -266,6 +269,27 @@ class LaTeXMLConverter:
             fallback_match = re.search(r'([A-Z][a-z]+)', bibblock_text)
             fallback_author = fallback_match.group(1) if fallback_match else "Unknown"
             return f"{fallback_author}{year}"
+    
+    def _add_author_year_tags(self, root, ref_key_to_citation, ns):
+        """Add author+year tags to bibliography entries"""
+        try:
+            # Find all bibliography items
+            bibitems = root.xpath('.//ltx:bibitem', namespaces=ns)
+            
+            for bibitem in bibitems:
+                key = bibitem.get('key')
+                if key and key in ref_key_to_citation:
+                    # Get the author+year format for this entry
+                    author_year = ref_key_to_citation[key]
+                    
+                    # Add author+year to the beginning of bibblock text
+                    bibblock = bibitem.find('.//ltx:bibblock', namespaces=ns)
+                    if bibblock is not None and bibblock.text:
+                        if not bibblock.text.strip().startswith(author_year):
+                            bibblock.text = f"{author_year}: {bibblock.text.strip()}"
+                            
+        except Exception as e:
+            print(f"   ⚠️ Failed to add author+year tags: {e}")
     
     def _add_references_section(self, root, bibliography, ns):
         """Replace existing empty bibliography with populated entries"""
