@@ -53,10 +53,10 @@ approaches/xml_to_epub/
 - **Best for**: Optimal quality when working
 
 ### ⚡ **LaTeXML Converter** (`latex_to_xml_latexml.py`)
-- **Method**: Professional LaTeXML engine with cognitive enhancement
-- **Strengths**: Industry-standard LaTeX processing, perfect table rendering
-- **Status**: ✅ Working, professional-grade conversion
-- **Best for**: Maximum accuracy and LaTeX compatibility
+- **Method**: Professional LaTeXML engine with Bedrock cognitive bibliography processing
+- **Strengths**: Industry-standard LaTeX processing, perfect tables, AI-enhanced citations
+- **Status**: ✅ Working, professional-grade conversion with cognitive enhancements
+- **Best for**: Maximum accuracy, LaTeX compatibility, and intelligent bibliography formatting
 
 ## Usage
 
@@ -108,7 +108,7 @@ python3 tools/compare_pages_bedrock.py
 | **Rules-Based** | ✅ Working | 99.8% | Complete extraction, reliable | Limited LaTeX cleaning |
 | **Cognitive** | ⚠️ Needs fixes | TBD | Intelligent parsing | Q CLI integration |
 | **Hybrid** | ⚠️ Experimental | 100%* | Best architecture | XML namespace issues |
-| **LaTeXML** | ✅ Working | 100% | Professional LaTeX processing, perfect tables | Requires LaTeXML install |
+| **LaTeXML** | ✅ Working | 100% | Professional LaTeX processing, perfect tables, cognitive bibliography | Requires LaTeXML install |
 
 *When working properly
 
@@ -141,6 +141,10 @@ pip3 install TexSoup pylatexenc
 sudo apt-get install latexml
 # OR (macOS with Homebrew)
 brew install latexml
+
+# AWS CLI setup for Bedrock cognitive processing
+aws configure
+pip3 install boto3
 ```
 
 ### For Cognitive Approach
@@ -175,15 +179,18 @@ python3 structural_review/review_structure.py ../../LaTeX/efficient-v22.tex outp
 The pipeline produces professional-quality ePub files with:
 - ✅ **Complete metadata** (title, authors, abstract)
 - ✅ **Structured content** (sections, equations, tables, figures)
-- ✅ **Bibliography** (32 references with complete metadata)
+- ✅ **Cognitive bibliography** (AI-enhanced citations with full author names)
 - ✅ **Professional formatting** with academic styling
+- ✅ **Clean text flow** (flattened citations, no line breaks)
+- ✅ **LaTeX cleanup** (removes artifacts like \xspace)
 - ✅ **Mobile compatibility** for all ePub readers
 
-### Example Results (Word2Vec Paper)
-- **Input**: 12-page LaTeX academic paper
-- **Output**: 28-page professional ePub (~16KB)
-- **Content**: 19 sections, 5 equations, 8 tables, 1 figure, 32 references
-- **Quality Score**: 100% (EXCELLENT) - LaTeXML approach
+### Example Results (ARC-AGI Paper)
+- **Input**: 12-page LaTeX academic paper with complex bibliography
+- **Output**: Professional ePub with cognitive enhancements (~995KB)
+- **Content**: 22 sections, 4 figures, 5 tables, 35 references
+- **Bibliography**: Full author names, complete publication details
+- **Quality Score**: 100% (EXCELLENT) - LaTeXML + Bedrock approach
 
 ## Architecture Benefits
 
