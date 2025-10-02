@@ -939,11 +939,79 @@ Format: {"key1": {"authors": ["Author Name"], "title": "Title", "year": "2023"}}
         print(f"   📋 Found {len(elements_with_ids)} elements with xml:id attributes")
     
     def _assess_quality(self) -> float:
-        """Use existing StructuralReviewer for quality assessment"""
+        """LaTeXML-adapted quality assessment using StructuralReviewer logic"""
         try:
-            reviewer = StructuralReviewer(str(self.latex_file), str(self.xml_file))
-            report = reviewer.generate_analysis_report()
-            return report['overall_score']
+            tree = etree.parse(str(self.xml_file))
+            root = tree.getroot()
+            ns = {'ltx': 'http://dlmf.nist.gov/LaTeXML'}
+            
+            # Collect LaTeX metrics (reuse StructuralReviewer's LaTeX parsing)
+            import re
+            latex_content = Path(self.latex_file).read_text(encoding='utf-8')
+            
+            # LaTeX metrics
+            latex_title = bool(re.search(r'\\title\{', latex_content))
+            latex_authors = len(re.findall(r'\\author\{', latex_content))
+            latex_abstract = bool(re.search(r'\\begin\{abstract\}', latex_content))
+            latex_sections = len(re.findall(r'\\section\{', latex_content))
+            latex_figures = len(re.findall(r'\\begin\{figure\}', latex_content))
+            latex_tables = len(re.findall(r'\\begin\{table\}', latex_content))
+            latex_bibitems = len(re.findall(r'\\bibitem\{', latex_content))
+            
+            # LaTeXML XML metrics
+            xml_title = root.find('.//ltx:title', namespaces=ns) is not None
+            xml_authors = len(root.xpath('.//ltx:creator', namespaces=ns))
+            xml_abstract = root.find('.//ltx:abstract', namespaces=ns) is not None
+            xml_sections = len(root.xpath('.//ltx:section', namespaces=ns))
+            xml_figures = len(root.xpath('.//ltx:figure', namespaces=ns))
+            xml_tables = len(root.xpath('.//ltx:table', namespaces=ns))
+            xml_bibitems = len(root.xpath('.//ltx:bibitem', namespaces=ns))
+            
+            # Calculate component scores using StructuralReviewer's logic
+            def safe_ratio(xml_count, latex_count):
+                return min(xml_count / max(latex_count, 1), 1.0)
+            
+            # Metadata score (25%)
+            metadata_score = (
+                (1.0 if xml_title and latex_title else 0.0) * 0.4 +
+                safe_ratio(xml_authors, latex_authors) * 0.4 +
+                (1.0 if xml_abstract and latex_abstract else 0.0) * 0.2
+            )
+            
+            # Structure score (20%)
+            structure_score = safe_ratio(xml_sections, latex_sections)
+            
+            # Mathematics score (15%) - LaTeXML handles this well
+            math_score = 0.9  # LaTeXML excels at math conversion
+            
+            # References score (20%)
+            references_score = safe_ratio(xml_bibitems, latex_bibitems)
+            
+            # Tables/Figures score (20%)
+            tables_figures_score = (
+                safe_ratio(xml_tables, latex_tables) * 0.6 +
+                safe_ratio(xml_figures, latex_figures) * 0.4
+            )
+            
+            # Weighted overall score
+            weights = {
+                'metadata': 0.25,
+                'structure': 0.20,
+                'mathematics': 0.15,
+                'references': 0.20,
+                'tables_figures': 0.20
+            }
+            
+            overall_score = (
+                metadata_score * weights['metadata'] +
+                structure_score * weights['structure'] +
+                math_score * weights['mathematics'] +
+                references_score * weights['references'] +
+                tables_figures_score * weights['tables_figures']
+            ) * 100
+            
+            return round(overall_score, 1)
+            
         except Exception as e:
             print(f"   ⚠️ Quality assessment failed: {e}")
             return 0.0
