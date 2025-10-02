@@ -16,3 +16,5 @@ LaTeX/
 approaches/xml_to_epub/output/
 *.xml
 *.epub
+output/
+*.log

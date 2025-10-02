@@ -1,7 +1,9 @@
-PyPDF2==3.0.1
+lxml>=4.9.0
 boto3>=1.40.30
+PyPDF2==3.0.1
 
 # System requirements:
+# - LaTeXML: sudo apt-get install latexml (Ubuntu/Debian) or brew install latexml (macOS)
 # - Calibre: sudo apt-get install calibre (Ubuntu/Debian) or brew install calibre (macOS)
 # - AWS credentials configured for Bedrock access
-# - AWS Bedrock Nova Micro model access in us-east-1 region
+# - AWS Bedrock Claude Sonnet model access in us-east-1 region

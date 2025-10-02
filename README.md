@@ -1,232 +1,151 @@
-# LaTeX to ePub Converter with Multi-Approach Processing
+# LaTeX to ePub Converter
 
-Convert LaTeX academic papers to high-quality ePub format using rules-based, cognitive AI, and hybrid processing approaches with professional XML transformation.
+Convert LaTeX academic papers to high-quality ePub format so you can read them on a mobile device. Uses LaTeXML processing with AI-enhanced bibliography formatting.
+![Screenshotof ePub reader showing converted paper](screenshot.png)
 
-## Current Architecture
+## 🚀 **Quick Start**
 
-### 🎯 **LaTeX → XML → ePub Pipeline**
-```
-LaTeX Source → [Rules-Based | Cognitive | Hybrid] → Structured XML → XSLT → Professional ePub
-```
-
-### 📁 **File Structure**
-```
-approaches/xml_to_epub/
-├── latex_to_xml_rules_based.py     # Heuristic regex-based LaTeX parsing
-├── latex_to_xml_cognitive.py       # Q Developer CLI-based conversion
-├── latex_to_xml_hybrid.py          # TexSoup + pylatexenc + LLM approach
-├── latex_to_xml_latexml.py         # LaTeXML professional conversion
-├── xml_to_epub.py                  # XSLT-based XML to ePub converter
-├── xml_to_epub.xsl                 # XSLT stylesheet for transformation
-├── xml_to_epub_latexml.py          # LaTeXML XML to ePub converter
-├── xml_to_epub_latexml.xsl         # LaTeXML XSLT stylesheet
-├── academic_paper_schema.xsd       # XML schema definition
-├── structural_review/
-│   └── review_structure.py         # Quality assessment tool
-├── tools/                          # Utility scripts
-│   ├── extract_epub_pages.py       # ePub page extraction for testing
-│   ├── compare_pages_bedrock.py    # AI-powered visual comparison
-│   ├── compare_converters.py       # Converter performance comparison
-│   └── split_source_pdf.py         # PDF splitting utility
-├── output/                         # All generated files (gitignored)
-└── epub_books/                     # Generated ePub files
-```
-
-## Four Conversion Approaches
-
-### 🔧 **Rules-Based Converter** (`latex_to_xml_rules_based.py`)
-- **Method**: Pure Python with regex parsing
-- **Strengths**: Reliable structure extraction, comprehensive content
-- **Status**: ✅ Working, generates professional ePubs
-- **Best for**: Stable, predictable conversion
-
-### 🧠 **Cognitive Converter** (`latex_to_xml_cognitive.py`)  
-- **Method**: Amazon Q Developer CLI with iterative improvement
-- **Strengths**: Intelligent content understanding, metadata handling
-- **Status**: ⚠️ Requires Q CLI integration fixes
-- **Best for**: Complex document understanding
-
-### 🔄 **Hybrid Converter** (`latex_to_xml_hybrid.py`)
-- **Method**: TexSoup (structure) + pylatexenc (content) + LLM (unstructured)
-- **Strengths**: Best of all approaches - structured parsing + AI processing
-- **Status**: ⚠️ XML namespace issues, needs refinement
-- **Best for**: Optimal quality when working
-
-### ⚡ **LaTeXML Converter** (`latex_to_xml_latexml.py`)
-- **Method**: Professional LaTeXML engine with Bedrock cognitive bibliography processing
-- **Strengths**: Industry-standard LaTeX processing, perfect tables, AI-enhanced citations
-- **Status**: ✅ Working, professional-grade conversion with cognitive enhancements
-- **Best for**: Maximum accuracy, LaTeX compatibility, and intelligent bibliography formatting
-
-## Usage
-
-### Convert LaTeX to XML
-
-#### Rules-Based Approach (Recommended)
 ```bash
-cd approaches/xml_to_epub
-python3 latex_to_xml_rules_based.py path/to/paper.tex
-```
+# Install dependencies
+pip install -r requirements.txt
 
-#### Cognitive Approach
-```bash
-cd approaches/xml_to_epub
-python3 latex_to_xml_cognitive.py path/to/paper.tex
-```
-
-#### LaTeXML Approach (Professional)
-```bash
-cd approaches/xml_to_epub
-python3 latex_to_xml_latexml.py path/to/paper.tex
-```
-
-### Convert XML to ePub
-```bash
-cd approaches/xml_to_epub
+# Convert LaTeX to ePub (two-step process)
+python3 latex_to_xml.py path/to/paper.tex
 python3 xml_to_epub.py output/paper.xml
-# OR for LaTeXML XML:
-python3 xml_to_epub_latexml.py output/paper_latexml.xml
+
+# Output: epub_books/paper.epub
+```
+
+## 📋 **Requirements**
+
+### System Dependencies
+```bash
+# LaTeXML (Ubuntu/Debian)
+sudo apt-get install latexml
+
+# LaTeXML (macOS)
+brew install latexml
+
+# AWS CLI for cognitive processing
+aws configure
+```
+
+### Python Dependencies
+```bash
+pip install -r requirements.txt
+```
+
+## 🎯 **Production Architecture**
+
+```
+LaTeX Source → LaTeX Expansion → LaTeXML → Cognitive Enhancement → XSLT → Professional ePub
+```
+
+### **Core Files**
+- `latex_to_xml.py` - LaTeXML + Bedrock cognitive converter
+- `xml_to_epub.py` - XSLT-based ePub generator
+- `xml_to_epub.xsl` - High quality LaTeXML stylesheet
+- `review_structure.py` - Quality assessment module
+
+## ✨ **Features**
+
+### **Professional-Quality LaTeX Processing**
+- ✅ **Multi-file support** - Automatic `\input{}`/`\include{}` expansion
+- ✅ **Industry-standard conversion** - LaTeXML engine with MathML
+- ✅ **Excellent table rendering** - Complex academic tables preserved
+- ✅ **Image handling** - Automatic figure processing and embedding
+
+### **AI-Enhanced Bibliography**
+- ✅ **Cognitive processing** - Amazon Bedrock Claude Sonnet handles complex, variables formats
+- ✅ **Smart citation formatting** - Converts to `[AuthorYear]` format
+- ✅ **Full author preservation** - Complete citation details
+- ✅ **Clean text flow** - Flattened citations, no line breaks
+
+### **Quality Assurance**
+- ✅ **LaTeX cleanup** - Removes artifacts like `\xspace`
+- ✅ **Comprehensive assessment** - LaTeXML-adapted quality scoring
+- ✅ **Professional output** - Mobile-compatible ePub format
+- ✅ **Validation** - Schema-compliant XML generation
+
+## 🔧 **Advanced Usage**
+
+### Directory Processing
+```bash
+# Automatically detects main LaTeX file
+python3 latex_to_xml.py path/to/latex/directory/
 ```
 
 ### Quality Assessment
-```bash
-cd approaches/xml_to_epub
-python3 structural_review/review_structure.py path/to/paper.tex output/paper.xml
+The converter provides detailed quality metrics:
+- **Metadata preservation** (title, authors, abstract)
+- **Structure conversion** (sections, equations, tables, figures)  
+- **Bibliography processing** (citation formatting, reference completeness)
+- **LaTeXML quality indicators** (XML structure, namespacing, content preservation)
+
+### Caching
+- **LaTeX expansion** - Cached with timestamp validation
+- **Bedrock calls** - Automatic response caching for efficiency
+
+## 📁 **Project Structure**
+
+```
+~/workspace/
+├── latex_to_xml.py              # Main LaTeX converter
+├── xml_to_epub.py               # ePub generator
+├── xml_to_epub.xsl              # XSLT stylesheet
+├── review_structure.py          # Quality assessment
+├── requirements.txt             # Dependencies
+├── output/                      # Generated XML files
+├── epub_books/                  # Generated ePub files
+└── approaches/                  # Historical development (see below)
 ```
 
-### Visual Quality Testing
-```bash
-cd approaches/xml_to_epub
-python3 tools/extract_epub_pages.py epub_books/paper.epub
-python3 tools/compare_pages_bedrock.py
-```
+## 📚 **Historical Development**
 
-## Performance Status
+The `approaches/` directory contains the research and development history of this converter:
 
-| Approach | Status | Quality | Strengths | Issues |
-|----------|--------|---------|-----------|--------|
-| **Rules-Based** | ✅ Working | 99.8% | Complete extraction, reliable | Limited LaTeX cleaning |
-| **Cognitive** | ⚠️ Needs fixes | TBD | Intelligent parsing | Q CLI integration |
-| **Hybrid** | ⚠️ Experimental | 100%* | Best architecture | XML namespace issues |
-| **LaTeXML** | ✅ Working | 100% | Professional LaTeX processing, perfect tables, cognitive bibliography | Requires LaTeXML install |
+### **approaches/xml_to_epub/**
+- `latex_to_xml_rules_based.py` - Pure Python regex-based parsing
+- `latex_to_xml_cognitive.py` - Amazon Q Developer CLI approach  
+- `latex_to_xml_hybrid.py` - TexSoup + pylatexenc + LLM combination
+- `latex_to_xml_latexml.py` - Original LaTeXML implementation
+- `xml_to_epub_latexml.py` - Original ePub generator
+- `structural_review/` - Quality assessment framework
+- `tools/` - Development utilities and testing tools
 
-*When working properly
+### **Evolution Summary**
+1. **Rules-Based** (99.8% quality) - Reliable but limited LaTeX cleaning
+2. **Cognitive** (experimental) - Q CLI integration challenges  
+3. **Hybrid** (100% when working) - Best architecture but XML namespace issues
+4. **LaTeXML** (96-100% quality) - **Production choice** - Professional processing with cognitive enhancements
 
-## Requirements
+The production version represents the culmination of this research, combining LaTeXML's professional LaTeX processing with Bedrock's cognitive bibliography enhancement.
 
-### Core Dependencies
-- Python 3.x
-- lxml (for XSLT processing)
-
-### Optional Dependencies
-- Amazon Q Developer CLI (`q` command) - for cognitive approach
-- TexSoup, pylatexenc - for hybrid approach
-- AWS CLI with Bedrock access - for visual testing
-
-## Installation
-
-### Basic Setup
-```bash
-pip3 install lxml
-```
-
-### For Hybrid Approach
-```bash
-pip3 install TexSoup pylatexenc
-```
-
-### For LaTeXML Approach
-```bash
-# Install LaTeXML (Ubuntu/Debian)
-sudo apt-get install latexml
-# OR (macOS with Homebrew)
-brew install latexml
-
-# AWS CLI setup for Bedrock cognitive processing
-aws configure
-pip3 install boto3
-```
-
-### For Cognitive Approach
-Follow: https://docs.aws.amazon.com/amazonq/latest/qdeveloper-ug/command-line-getting-started-installing.html
-
-### For Visual Testing
-```bash
-# AWS CLI setup for Bedrock access
-aws configure
-```
-
-## Example Usage
-
-### Basic Conversion
-```bash
-cd approaches/xml_to_epub
-python3 latex_to_xml_rules_based.py ../../LaTeX/efficient-v22.tex
-python3 xml_to_epub.py output/efficient-v22_rules_based.xml
-```
-
-### With Quality Testing
-```bash
-cd approaches/xml_to_epub
-python3 latex_to_xml_rules_based.py ../../LaTeX/efficient-v22.tex
-python3 xml_to_epub.py output/efficient-v22_rules_based.xml
-python3 tools/extract_epub_pages.py epub_books/Efficient_Estimation_of_Word_Representations_in_Ve.epub
-python3 structural_review/review_structure.py ../../LaTeX/efficient-v22.tex output/efficient-v22_rules_based.xml
-```
-
-## Output Quality
-
-The pipeline produces professional-quality ePub files with:
-- ✅ **Complete metadata** (title, authors, abstract)
-- ✅ **Structured content** (sections, equations, tables, figures)
-- ✅ **Cognitive bibliography** (AI-enhanced citations with full author names)
-- ✅ **Professional formatting** with academic styling
-- ✅ **Clean text flow** (flattened citations, no line breaks)
-- ✅ **LaTeX cleanup** (removes artifacts like \xspace)
-- ✅ **Mobile compatibility** for all ePub readers
-
-### Example Results (ARC-AGI Paper)
-- **Input**: 12-page LaTeX academic paper with complex bibliography
-- **Output**: Professional ePub with cognitive enhancements (~995KB)
-- **Content**: 22 sections, 4 figures, 5 tables, 35 references
-- **Bibliography**: Full author names, complete publication details
-- **Quality Score**: 100% (EXCELLENT) - LaTeXML + Bedrock approach
-
-## Architecture Benefits
-
-### **Multi-Approach Strategy**
-- **Rules-based**: Reliable baseline with comprehensive extraction
-- **Cognitive**: Intelligent understanding for complex cases
-- **Hybrid**: Combines structured parsing with AI processing
-
-### **Professional Pipeline**
-- **XSLT Transformation**: Industry-standard XML publishing
-- **Schema Validation**: Ensures consistent output format
-- **Quality Assurance**: Automated testing and visual comparison
-
-### **Extensible Design**
-- **Modular components**: Each approach can be improved independently
-- **Tool ecosystem**: Utilities for testing, comparison, and analysis
-- **Standard formats**: XML schema and XSLT for customization
-
-## Troubleshooting
+## 🛠 **Troubleshooting**
 
 ### Common Issues
 ```bash
-# Check dependencies
-python3 -c "import lxml.etree; print('lxml available')"
-python3 -c "import TexSoup; print('TexSoup available')"
+# Check LaTeXML installation
+latexml --version
 
-# Verify Q CLI (if using cognitive approach)
-q --version
+# Verify AWS credentials
+aws sts get-caller-identity
 
-# Test XSLT transformation
-python3 xml_to_epub.py output/sample.xml
+# Test dependencies
+python3 -c "import lxml.etree, boto3; print('Dependencies OK')"
 ```
 
 ### File Organization
-- All generated output goes in `output/` directory
-- Tools and utilities in `tools/` directory
-- Follow naming convention: `*_rules_based`, `*_cognitive`, `*_hybrid`
+- Generated XML files: `output/`
+- Generated ePub files: `epub_books/`
+- Expanded LaTeX files: `*_expanded.tex` (cached)
 
-This pipeline represents a comprehensive approach to academic document conversion, providing multiple strategies for different use cases while maintaining professional quality standards.
+## 🎉 **Production Ready**
+
+This converter produces publication-quality ePub files suitable for:
+- ✅ **Academic publishing** - Professional formatting and citations
+- ✅ **Mobile reading** - Compatible with all ePub readers
+- ✅ **Archival storage** - Standards-compliant format
+- ✅ **Distribution** - Optimized file sizes with complete content
+
+The LaTeXML + Bedrock cognitive approach delivers consistent, high-quality results for academic document conversion.
