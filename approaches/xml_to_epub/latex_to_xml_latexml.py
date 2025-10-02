@@ -90,11 +90,126 @@ class LaTeXMLConverter:
         self.stats = {}
         self.bedrock = BedrockClient()
     
+    def _ensure_expanded_latex(self, latex_path: str) -> str:
+        """Expand LaTeX file if needed, return path to expanded version"""
+        latex_path = Path(latex_path)
+        
+        # If directory, find main .tex file
+        if latex_path.is_dir():
+            main_files = list(latex_path.glob("*.tex"))
+            if len(main_files) == 1:
+                latex_path = main_files[0]
+            else:
+                # Look for common main file names
+                for name in ["main.tex", "paper.tex", f"{latex_path.name}.tex"]:
+                    if (latex_path / name).exists():
+                        latex_path = latex_path / name
+                        break
+                else:
+                    # Filter out expanded files and look for conference/paper patterns
+                    candidates = [f for f in main_files if not f.name.endswith('_expanded.tex')]
+                    conference_files = [f for f in candidates if 'conference' in f.name or 'paper' in f.name]
+                    
+                    if len(conference_files) == 1:
+                        latex_path = conference_files[0]
+                    elif len(candidates) == 1:
+                        latex_path = candidates[0]
+                    else:
+                        raise ValueError(f"Multiple .tex files found in {latex_path}. Candidates: {[f.name for f in candidates]}")
+        
+        # Create expanded filename
+        expanded_path = latex_path.parent / f"{latex_path.stem}_expanded.tex"
+        
+        # Check if expansion needed
+        if expanded_path.exists():
+            # Check if expanded file is newer than all source files
+            expanded_time = expanded_path.stat().st_mtime
+            if self._is_expansion_current(latex_path, expanded_time):
+                print(f"   ✅ Using existing expanded file: {expanded_path}")
+                return str(expanded_path)
+        
+        # Expand the file
+        print(f"   📄 Expanding LaTeX includes: {latex_path}")
+        expanded_content = self._expand_latex_recursive(latex_path)
+        
+        with open(expanded_path, 'w', encoding='utf-8') as f:
+            f.write(expanded_content)
+        
+        return str(expanded_path)
+    
+    def _is_expansion_current(self, main_file: Path, expanded_time: float) -> bool:
+        """Check if expanded file is newer than all source files"""
+        def check_file_time(file_path: Path) -> bool:
+            if not file_path.exists():
+                return True  # Missing files don't invalidate
+            return file_path.stat().st_mtime <= expanded_time
+        
+        # Check main file
+        if not check_file_time(main_file):
+            return False
+        
+        # Check all included files recursively
+        try:
+            with open(main_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            # Find all input/include commands
+            import re
+            includes = re.findall(r'\\(?:input|include)\{([^}]+)\}', content)
+            
+            for include in includes:
+                include_path = main_file.parent / f"{include}.tex"
+                if include_path.exists() and not check_file_time(include_path):
+                    return False
+                    
+        except Exception:
+            return False  # If we can't check, assume stale
+        
+        return True
+    
+    def _expand_latex_recursive(self, latex_file: Path) -> str:
+        """Recursively expand all input/include commands"""
+        try:
+            with open(latex_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+        except Exception as e:
+            print(f"   ⚠️ Could not read {latex_file}: {e}")
+            return ""
+        
+        # Replace input/include commands
+        import re
+        
+        def replace_include(match):
+            include_file = match.group(1)
+            # Handle both with and without .tex extension
+            if include_file.endswith('.tex'):
+                include_path = latex_file.parent / include_file
+            else:
+                include_path = latex_file.parent / f"{include_file}.tex"
+            
+            if include_path.exists():
+                # Recursively expand the included file
+                included_content = self._expand_latex_recursive(include_path)
+                return f"% Expanded from {include_file}\n{included_content}\n% End of {include_file}\n"
+            else:
+                print(f"   ⚠️ Include file not found: {include_path}")
+                return match.group(0)  # Keep original if file not found
+        
+        # Replace both \input{} and \include{} commands
+        content = re.sub(r'\\(?:input|include)\{([^}]+)\}', replace_include, content)
+        
+        return content
+    
     def convert_to_xml(self) -> str:
         """Convert LaTeX to XML using LaTeXML with cognitive enhancement"""
         print("🚀 LaTeXML-based LaTeX-to-XML Converter")
         print("=" * 50)
         print(f"📋 Architecture: LaTeXML + cognitive post-processing")
+        
+        # Phase 0: Ensure LaTeX is expanded
+        print("📄 Phase 0: LaTeX expansion...")
+        expanded_latex = self._ensure_expanded_latex(self.latex_file)
+        self.latex_file = Path(expanded_latex)  # Use expanded version for processing
         
         # Phase 1: LaTeXML conversion
         print("🔍 Phase 1: LaTeXML conversion...")
